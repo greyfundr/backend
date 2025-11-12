@@ -1,0 +1,95 @@
+<!-- views/form.html -->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GreyFoundr Backend</title>
+</head>
+
+<body>
+    <h1>Welcome to GreyFoundr Backend</h1>
+
+     <h2> Api Status: Live</h2>
+
+     <div>
+        <h2> Available Links</h2>
+
+        <a href="/register"> Register </a>
+        <a href="/users"> View Users </a><br>
+        <a href="/createcampain"> create Campaign </a><br>
+        <a href="/campaign/getall"> View All Campaign </a><br>
+        <a href="/login"> Login </a>
+
+    </div>
+
+    <div>
+        <h2> Available API</h2>
+
+        <h1> Users (/users)</h1>
+        get('/', getUsers);
+        get('/:id', getUserById);
+        post('/', createUser);
+        put('/:id', updateUser);
+        delete('/:id', deleteUser);
+        
+        <h1> Backers (/backers)</h1>
+
+        get('/', getBackers);
+        get('/:id', getBackerById);
+        post('/', createBacker);
+        put('/:id', updateBacker);
+        delete('/:id', deleteBacker);
+        
+        <h1> Champions (/champions)</h1>
+
+        get('/', getChampions);
+        get('/:id', getChampionById);
+        post('/', createChampion);
+        put('/:id', updateChampion);
+        delete('/:id', deleteChampion);
+
+
+        <h1> Influencers (/influencers)</h1>
+
+        get('/', getInfluencer);
+        get('/:id', getInfluencerById);
+        post('/', createInfluencer);
+        put('/:id', updateInfluencer);
+        delete('/:id', deleteInfluencer);
+
+        <h1> Wallet (/wallets)</h1>
+
+        get('/', getWallets);
+        get('/:id', getWalletById);
+        post('/', createWallet);
+        put('/:id', updateWallet);
+        delete('/:id', deleteWallet);
+
+        <h1> Campaign (/campaigns)</h1>
+
+        get('/', getCampaigns);
+        get('/:id', getCampaignById);
+        post('/', createCampaign);
+        put('/:id', updateCampaign);
+        delete('/:id', deleteCampaign);
+
+        <h3> Payment (/payments)</h3>
+
+        get('/', getPayments);
+        get('/:id', getPaymentById);
+        post('/', createPayment);
+        put('/:id', updatePayment);
+        delete('/:id', deletePayment);
+
+        <h3> Authentication (/auth)</h3>
+        post('/login', loginUser);
+        post('/register', createUser);
+        get('/forgot/:id', forgotPassword);
+        get('/getProfile/:id', getProfile);
+    </div>
+    
+</body>
+
+</html>

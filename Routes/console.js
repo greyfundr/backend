@@ -1,0 +1,56 @@
+    const notificationRoutes = require('./routes/notificationRoutes');
+    const userRoute = require('./Routes/endpoints/user');
+    const authRoute = require('./Routes/endpoints/auth');
+    const adminRoute = require('./Routes/endpoints/admin');
+    const backerRoute = require('./Routes/endpoints/backer');
+    const campaignRoute = require('./Routes/endpoints/campaigns');
+    const championRoute = require('./Routes/endpoints/champion');
+    const followerRoute = require('./Routes/endpoints/follower');
+    const walletRoute = require('./Routes/endpoints/wallets');
+
+
+   
+   const path = require('path');
+
+    app.use('/api/notifications', notificationRoutes);
+    app.use(express.static(path.join(__dirname, 'public')));
+    
+    app.use('/users', userRoute);
+    app.use(express.static(path.join(__dirname, 'public')));
+
+    app.use('/auth', authRoute);
+    app.use(express.static(path.join(__dirname, 'public')));
+
+    app.use('/wallet', walletRoute);
+    app.use(express.static(path.join(__dirname, 'public')));
+
+    app.use('/follower', followerRoute);
+    app.use(express.static(path.join(__dirname, 'public')));
+
+    app.use('/champion', championRoute);
+    app.use(express.static(path.join(__dirname, 'public')));
+
+    app.use('/campaign', campaignRoute);
+    app.use(express.static(path.join(__dirname, 'public')));
+
+    app.use('/admin', adminRoute);
+    app.use(express.static(path.join(__dirname, 'public')));
+
+    app.use('/backer', backerRoute);
+    app.use(express.static(path.join(__dirname, 'public')));
+    
+    app.get('/', (req, res) => {
+        res.sendFile(path.join(__dirname, 'views', 'main.html'));
+    });
+
+    app.get('/register', (req, res) => {
+        res.sendFile(path.join(__dirname, 'views', 'register.html'));
+    });
+
+    app.get('/createcampain', (req, res) => {
+        res.sendFile(path.join(__dirname, 'views', 'campaign.html'));
+    });
+
+    app.get('/login', (req, res) => {
+        res.sendFile(path.join(__dirname, 'views', 'login.html'));
+    });
