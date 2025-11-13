@@ -6,6 +6,8 @@ const {
   forgotPassword,
   createUser ,
   getProfile ,
+  verify,
+  updateDetails,
 } = require('../../Controllers/AuthController');
 
 
@@ -20,6 +22,8 @@ router.post('/login', loginUser);
 router.post('/register', createUser);
 router.get('/forgot/:id', forgotPassword);
 router.get('/getProfile/:id', getProfile);
+router.post('/verifyphone', verify);
+router.post('/updateregister', updateDetails);
 
 
 

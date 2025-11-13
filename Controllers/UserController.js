@@ -79,6 +79,11 @@ const createUser  = async (req, res) => {
   }
 };
 
+function generateVerificationCode() {
+  // Generates a random integer between 100000 (inclusive) and 999999 (inclusive)
+  return crypto.randomInt(100000, 999999); 
+}
+
 // Update user by ID
 const updateUser  = async (req, res) => {
   const { id } = req.params;
