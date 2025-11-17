@@ -37,7 +37,7 @@ function sendText(phone,code) {
               "sms":"Plese Find Your 4 Digit Code from GreyFundr" + code,
               "type":"plain",
               "api_key":"TLkRwoqVGUpzTdsffRGPjilxXvEqVXeElcfqpYWlNXYeyFOSZyvNIqtIJBNHLb",
-              "channel":"whatsapp",
+              "channel":"generic",
                 
             };
     var options = {
