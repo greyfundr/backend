@@ -10,6 +10,7 @@ const {
   getCampaignByName ,
   getCategory,
   getApprovalStatus,
+  stakeholderApproval,
 } = require('../../Controllers/Campaign/CampaignController');
 
 
@@ -21,6 +22,7 @@ router.get('/getall', getCampaigns);
 router.get('/getCategory', getCategory);
 router.get('/getcampaign/:id', getCampaignById);
 router.get('/getApprovalStatus/:id', getApprovalStatus);
+router.put('/stakeholderApproval/:id', stakeholderApproval);
 router.get('/searchCampaign/:name', getCampaignByName);
 router.post('/create', createCampaign);
 router.put('/:id', updateCampaign);

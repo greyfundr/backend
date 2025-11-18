@@ -35,6 +35,12 @@ const getApproval = async (id) => {
   return rows;
 };
 
+const stakeholderApproval = async (id) => {
+  const columnName = 'total_approved';
+  const [rows] = await db.execute('UPDATE campaigns set ${columnName} = ${columnName} + 1 WHERE id = ?', [id]);
+  return rows;
+};
+
 
 
 // Get campaign by ID
@@ -132,4 +138,5 @@ module.exports = {
   getCampaignByName,
   getCategory,
   getApproval,
+  stakeholderApproval,
 };
