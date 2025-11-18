@@ -85,7 +85,8 @@ const createCampaign  = async (req, res) => {
 
   stakeholder = JSON.parse(stakeholders);
   hosts = stakeholder.length;
- 
+  
+  console.log(stakeholder);
 
   if (!title || !description || !id) {
     return res.status(400).json({ error: 'Title, Description, and Amount are required' });
