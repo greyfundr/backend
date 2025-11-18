@@ -28,9 +28,3 @@ const SplitBill = sequelize.define("splitbill", {
             unique: true,
         },
 });
-
-sequelize.sync().then(() => {
-   console.log('SplitBill table created successfully!');
-}).catch((error) => {
-   console.error('Unable to create table : ', error);
-});

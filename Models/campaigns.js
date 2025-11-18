@@ -28,6 +28,15 @@ const getCategory = async () => {
   return rows;
 };
 
+const getApproval = async (id) => {
+  let query = ('SELECT champions,host,approved FROM campaign WHERE id = ?', [id]);
+ 
+  const [rows] = await db.execute('SELECT champions,host,approved FROM campaigns WHERE id = ?', [id]);
+  return rows;
+};
+
+
+
 // Get campaign by ID
 const getCampaignById = async (id) => {
   const [rows] = await db.execute('SELECT * FROM campaigns WHERE id = ?', [id]);
@@ -122,4 +131,5 @@ module.exports = {
   getCampaignsByUserId,
   getCampaignByName,
   getCategory,
+  getApproval,
 };

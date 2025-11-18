@@ -21,13 +21,13 @@ exports.getNotification = async (req, res) => {
   }
 };
 
-exports.createNotification = async (req, res) => {
+exports.createNotification = async (user_id,message,type,campaign_id) => {
   try {
-    const { user_id, message, type } = req.body;
-    const id = await Notification.create({ user_id, message, type });
-    res.status(201).json({ id, message: 'Notification created' });
+   
+    const id = await Notification.create({ user_id, message, type, campaign_id });
+    return id;
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.log(error);
   }
 };
 
