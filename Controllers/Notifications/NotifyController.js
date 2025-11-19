@@ -3,6 +3,7 @@ const Notification = require('../../Models/notifications');
 exports.getNotifications = async (req, res) => {
   try {
     const { userId } = req.params;
+    console.log(userId);
     const notifications = await Notification.findAll(userId);
     res.json(notifications);
   } catch (error) {
@@ -13,6 +14,7 @@ exports.getNotifications = async (req, res) => {
 exports.getNotification = async (req, res) => {
   try {
     const { id } = req.params;
+    
     const notification = await Notification.findById(id);
     if (!notification) return res.status(404).json({ error: 'Notification not found' });
     res.json(notification);
