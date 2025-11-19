@@ -17,4 +17,9 @@ const sequelize = new Sequelize(
    console.error('Unable to connect to the database: ', error);
 });
 
+// sequelize.sync({ alter: true })
+//   .then(() => console.log("Database synchronized"))
+//   .catch((err) => console.error("Sync error", err));
+
+
   module.exports = sequelize;

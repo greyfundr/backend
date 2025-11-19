@@ -8,7 +8,7 @@ const SplitBillParticipant = sequelize.define(
     split_bill_id: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      references: { model: "SplitBill", key: "id" },
+      references: { model: "split_bills", key: "id" },
     },
     user_id: { type: DataTypes.INTEGER, allowNull: false },
     amount_owed: {

@@ -1,7 +1,4 @@
-// services/splitBillService.js
 const { sequelize, SplitBill, SplitBillParticipant } = require("../Models/index");
-const { Op } = require("sequelize");
-const { randomUUID } = require("crypto");
 
 function calculateEvenSplit(total, count) {
   const per = parseFloat((total / count).toFixed(2));
@@ -196,8 +193,7 @@ class SplitBillService {
   static async getBillDetails(billId) {
     const bill = await SplitBill.findByPk(billId, {
       include: [
-        { model: SplitBillParticipant, as: "participants", include: ["user"] },
-        "creator",
+        { model: SplitBillParticipant, as: "participants" },
       ],
     });
     if (!bill) throw new Error("Bill not found");
