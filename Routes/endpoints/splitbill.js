@@ -1,19 +1,19 @@
-const express = require('express');
-const router = express.Router();
-
+const express = require("express");
 const {
   getSplitBill,
-  
-} = require('../../Controllers/SplitBill/SplitBillController');
+  createSplitBill,
+  finalizeBill,
+  // markPaid,
+} = require("../../Controllers/SplitBill/SplitBillController");
+const { verifyToken } = require("../../middleware/auth");
 
-
+const router = express.Router();
 
 router.use(express.urlencoded({ extended: true }));
 
-// Routes
-router.get('/getSplitBill/:id', getSplitBill);
-
-
-
+router.get("/:id", verifyToken, getSplitBill);
+router.post("/create", verifyToken, createSplitBill);
+router.post("/:id/finalize", verifyToken, finalizeBill);
+// router.post("/:id/participants/:userId/paid", markPaid);
 
 module.exports = router;

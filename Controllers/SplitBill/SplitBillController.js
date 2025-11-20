@@ -7,37 +7,89 @@
 // - In production, always hash passwords (e.g., using bcrypt) and add input validation (e.g., using Joi or express-validator).
 // - These controllers handle basic operations: GET all users, GET by ID, POST create, PUT update, DELETE by ID.
 
-const crypto = require('crypto');
-const SplitBill = require('../../Models/splitbill')
+const SplitBillService = require("../../Services/splitBillService");
+const NotificationService = require("../../Services/notificationService");
+// const PaymentService = require("../../Services/paymentService");
 
-
-
-// Get all users
 const getSplitBill = async (req, res) => {
-    const { bill_id } = req.body;
   try {
-          console.log("TEST DATA :");
-          const result = await SplitBill.getSpliBills(bill_id);
-          
-          if(!result)
-          {
-            return res.status(400).json({ msg: 'Incorrect Bill ID' });
-          }
-        res.status(200).json({ msg: 'Loaded successfully', result });
-            
-             // res.status(200).json(result);
+    const billId = Number(req.params.id);
+    const result = await SplitBillService.getBillDetails(billId);
+
+    if (!result) {
+      return res.status(400).json({ msg: "Bill not found" });
+    }
+
+    return res.status(200).json({
+      msg: "Bill loaded successfully",
+      data: result,
+    });
   } catch (error) {
-    console.error('Error fetching users:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-  finally
-  {
-    con.release();
+    console.error("Error fetching bill:", error);
+    return res.status(500).json({ error: "Internal server error" });
   }
 };
 
+const createSplitBill = async (req, res) => {
+  try {
+    const creatorId = req.user.id;
+    const bill = await SplitBillService.createBill({
+      creatorId,
+      ...req.body,
+    });
 
+    await NotificationService.notifyParticipantsCreated(bill);
+
+    return res.status(201).json({
+      msg: "Bill created successfully",
+      data: bill,
+    });
+  } catch (error) {
+    console.error("Error creating bill:", error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+const finalizeBill = async (req, res) => {
+  try {
+    const billId = Number(req.params.id);
+    const bill = await SplitBillService.finalizeBill(billId);
+
+    await NotificationService.notifyBillFinalized(bill);
+
+    return res.status(200).json({ msg: "Bill finalized", data: bill });
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
+};
+
+// const markPaid = async (req, res) => {
+//   try {
+//     const billId = Number(req.params.id);
+//     const userId = Number(req.params.userId);
+//     const { payment_reference, proof_url } = req.body;
+
+//     const participant = await PaymentService.applyPayment({
+//       billId,
+//       userId,
+//       payment_reference,
+//       proof_url,
+//     });
+
+//     await NotificationService.notifyPaymentReceived(participant);
+
+//     return res.status(200).json({
+//       msg: "Payment recorded",
+//       data: participant,
+//     });
+//   } catch (error) {
+//     return res.status(400).json({ error: error.message });
+//   }
+// };
 
 module.exports = {
   getSplitBill,
+  createSplitBill,
+  finalizeBill,
+  // markPaid,
 };
