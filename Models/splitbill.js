@@ -4,7 +4,12 @@ const sequelize = require("../Config/sequalize_db");
 const SplitBill = sequelize.define(
   "SplitBill",
   {
-    id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
+      allowNull: false,
+    },
     title: { type: DataTypes.STRING, allowNull: false },
     description: { type: DataTypes.TEXT, allowNull: true },
     currency: {
@@ -13,7 +18,7 @@ const SplitBill = sequelize.define(
       defaultValue: "NGN",
     },
     amount: { type: DataTypes.DECIMAL(18, 2), allowNull: false },
-    creator_id: { type: DataTypes.INTEGER, allowNull: false },
+    creator_id: { type: DataTypes.UUID, allowNull: false }, 
     split_method: {
       type: DataTypes.ENUM("EVEN", "MANUAL", "RANDOM_PICK"),
       allowNull: false,
@@ -40,9 +45,9 @@ const SplitBill = sequelize.define(
       defaultValue: 0,
     },
     total_paid: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.DECIMAL(18, 2), 
       allowNull: false,
-      defaultValue: 0,
+      defaultValue: 0.00,
     },
     created_at: {
       type: DataTypes.DATE,

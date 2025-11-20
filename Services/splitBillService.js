@@ -1,13 +1,81 @@
-const { sequelize, SplitBill, SplitBillParticipant } = require("../Models/index");
-
-function calculateEvenSplit(total, count) {
-  const per = parseFloat((total / count).toFixed(2));
-  const sum = per * count;
-  const remainder = parseFloat((total - sum).toFixed(2));
-  return { per, remainder };
-}
+const {
+  sequelize,
+  SplitBill,
+  SplitBillParticipant,
+} = require("../Models/index");
+const User = require("../Models/user");
+const Op = require("sequelize");
 
 class SplitBillService {
+  static async validateParticipants(participants) {
+    const guestParticipants = [];
+    const userParticipants = [];
+    const userIdsToCheck = new Set();
+
+    const phoneRegex = /^\+?[0-9]{10,15}$/;
+
+    if (!participants || participants.length === 0) {
+      throw new Error("You must add at least one participant");
+    }
+
+    for (const p of participants) {
+      if (p.type === "GUEST") {
+        if (!p.name || p.name.trim().length < 2) {
+          throw new Error(`Invalid guest name: ${p.name}`);
+        }
+        const isPhoneValid = p.phone && phoneRegex.test(p.phone);
+        if (!isPhoneValid) {
+          throw new Error(`Guest '${p.name}' requires a valid phone number.`);
+        }
+        guestParticipants.push({
+          name: p.name.trim(),
+          phone: p.phone,
+          percent: p.percent ?? null,
+          amount: p.amount ?? null,
+          originalIndex: guestParticipants.length + userParticipants.length,
+          type: "GUEST",
+        });
+      } else if (p.type === "USER") {
+        if (!p.userId)
+          throw new Error("Participant of type USER missing userId");
+        if (userIdsToCheck.has(p.userId)) {
+          throw new Error(`Duplicate user detected in payload: ${p.userId}`);
+        }
+        userIdsToCheck.add(p.userId);
+        userParticipants.push({
+          userId: p.userId,
+          percent: p.percent ?? null,
+          amount: p.amount ?? null,
+          type: "USER",
+        });
+      } else {
+        throw new Error("Invalid participant type. Must be USER or GUEST");
+      }
+    }
+
+    if (userIdsToCheck.size > 0) {
+      const foundUsers = await User.findAll({
+        where: {
+          id: {
+            [Op.in]: Array.from(userIdsToCheck),
+          },
+        },
+        attributes: ["id"],
+        raw: true,
+      });
+
+      if (foundUsers.length !== userIdsToCheck.size) {
+        const foundIds = new Set(foundUsers.map((u) => u.id));
+        const invalidIds = Array.from(userIdsToCheck).filter(
+          (id) => !foundIds.has(id)
+        );
+        throw new Error(`Invalid User IDs provided: ${invalidIds.join(", ")}`);
+      }
+    }
+
+    return { guestParticipants, userParticipants };
+  }
+
   static async createBill({
     creatorId,
     title,
@@ -17,10 +85,14 @@ class SplitBillService {
     splitMethod = "EVEN",
     dueDate = null,
     description = null,
+    imageUrl = null,
   }) {
     if (!title || !amount || !participants || participants.length === 0) {
       throw new Error("Missing required fields: title, amount, participants");
     }
+
+    await this.validateParticipants(participants);
+    const totalParticipantsCount = participants.length;
 
     return await sequelize.transaction(async (t) => {
       const bill = await SplitBill.create(
@@ -32,113 +104,206 @@ class SplitBillService {
           creator_id: creatorId,
           split_method: splitMethod,
           due_date: dueDate,
+          image_url: imageUrl,
+          total_participants: totalParticipantsCount,
         },
         { transaction: t }
       );
 
-      const participantRows = participants.map((p) => ({
-        split_bill_id: bill.id,
-        user_id: p.userId,
-        amount_to_pay: 0,
-        percent_of_total: p.percent ?? null,
-      }));
+      const dbRows = participants.map((p) => {
+        if (p.type === "USER") {
+          return {
+            split_bill_id: bill.id,
+            user_id: p.userId,
+            guest_name: null,
+            guest_phone: null,
+            amount_owed: 0.0,
+            percentage: p.percent ?? null,
+            created_at: new Date(),
+          };
+        } else {
+          return {
+            split_bill_id: bill.id,
+            user_id: null,
+            guest_name: p.name,
+            guest_phone: p.phone,
+            amount_owed: 0.0,
+            percentage: p.percent ?? null,
+            created_at: new Date(),
+          };
+        }
+      });
 
-      await SplitBillParticipant.bulkCreate(participantRows, { transaction: t });
+      console.log("ADDING PARTICIPANT TO BILL:", bill.id);
 
-      await this.computeAndSaveShares(bill.id, splitMethod, t, participants);
+      const exists = await SplitBill.findByPk(bill.id);
+      console.log("Bill Exists:", !!exists);
+
+      console.log("db rows", dbRows);
+
+      await SplitBillParticipant.bulkCreate(dbRows, { transaction: t });
+
+      await this.computeAndSaveShares(bill, participants, splitMethod, t);
 
       return bill;
     });
   }
 
   static async computeAndSaveShares(
-    billId,
+    bill,
+    participants,
     splitMethod,
-    transaction,
-    participantsPayload = null
+    transaction
   ) {
-    const bill = await SplitBill.findByPk(billId, {
-      include: [{ model: SplitBillParticipant, as: "participants" }],
+    const billRecord =
+      typeof bill === "object" && bill.id
+        ? bill
+        : await SplitBill.findByPk(bill.id, { transaction });
+
+    const totalAmount = parseFloat(billRecord.amount);
+    const numParticipants = participants.length;
+
+    const dbParticipants = await SplitBillParticipant.findAll({
+      where: { split_bill_id: billRecord.id },
+      order: [
+        ["created_at", "ASC"],
+        ["id", "ASC"],
+      ],
       transaction,
     });
 
-    if (!bill) throw new Error("Bill not found");
+    if (dbParticipants.length !== numParticipants) {
+      throw new Error("Mismatch between input participants and DB rows");
+    }
 
-    const participants = bill.participants;
-    const total = parseFloat(bill.amount);
+    const round2 = (v) => Math.round(v * 100) / 100;
+
+    const owedAmounts = new Array(numParticipants).fill(0.0);
 
     if (splitMethod === "EVEN") {
-      const count = participants.length;
-      const { per, remainder } = calculateEvenSplit(total, count);
+      const base = Math.floor((totalAmount / numParticipants) * 100) / 100;
+      let sumBase = base * numParticipants;
+      let remainder = Math.round((totalAmount - sumBase) * 100);
 
-      for (let i = 0; i < participants.length; i++) {
-        const amount = per + (i === 0 ? remainder : 0);
-        participants[i].amount_to_pay = amount;
-        participants[i].percent_of_total = Number(
-          ((amount / total) * 100).toFixed(2)
-        );
-        await participants[i].save({ transaction });
+      for (let i = 0; i < numParticipants; i++) {
+        let centAdd = 0;
+        if (remainder > 0) {
+          centAdd = 1;
+          remainder--;
+        }
+        owedAmounts[i] = round2(base + centAdd / 100);
+      }
+
+      const totalComputed = owedAmounts.reduce((a, b) => a + b, 0);
+      const diff = round2(totalAmount - totalComputed);
+      if (Math.abs(diff) >= 0.01) {
+        owedAmounts[0] = round2(owedAmounts[0] + diff);
       }
     } else if (splitMethod === "MANUAL") {
-      if (!participantsPayload) {
-        throw new Error("Manual split requires participant amounts payload.");
-      }
-
-      const map = new Map();
-      participantsPayload.forEach((p) => map.set(p.userId, p));
-
-      for (const pRow of participants) {
-        const input = map.get(pRow.user_id);
-        if (!input)
-          throw new Error(`Missing manual split for user ${pRow.user_id}`);
-        let amt;
-        if (typeof input.amount === "number") {
-          amt = parseFloat(input.amount.toFixed(2));
-        } else if (typeof input.percent === "number") {
-          amt = parseFloat(((input.percent / 100) * total).toFixed(2));
-        } else {
-          throw new Error(`Invalid manual input for user ${pRow.user_id}`);
-        }
-        pRow.amount_to_pay = amt;
-        pRow.percent_of_total = Number(((amt / total) * 100).toFixed(2));
-        await pRow.save({ transaction });
-      }
-    } else if (splitMethod === "RANDOM_PICK") {
-      const randomIndex = Math.floor(Math.random() * participants.length);
+      let sum = 0;
       for (let i = 0; i < participants.length; i++) {
         const p = participants[i];
-        if (i === randomIndex) {
-          p.amount_to_pay = 0;
-          p.percent_of_total = 0;
-        } else {
-          const per = parseFloat(
-            (total / (participants.length - 1)).toFixed(2)
+        if (typeof p.amount !== "number") {
+          throw new Error(
+            "Manual split expects each participant to specify an amount"
           );
-          p.amount_to_pay = per;
-          p.percent_of_total = Number(((per / total) * 100).toFixed(2));
         }
-        await p.save({ transaction });
+        owedAmounts[i] = round2(p.amount);
+        sum += owedAmounts[i];
+      }
+      const diff = Math.abs(round2(sum) - round2(totalAmount));
+      if (diff > 0.1) {
+        throw new Error(
+          `Manual amounts sum to ${sum} but bill amount is ${totalAmount}`
+        );
+      }
+      const totalComputed = owedAmounts.reduce((a, b) => a + b, 0);
+      const adjust = round2(totalAmount - totalComputed);
+      if (Math.abs(adjust) >= 0.01) {
+        owedAmounts[0] = round2(owedAmounts[0] + adjust);
+      }
+    } else if (splitMethod === "RANDOM_PICK") {
+      const payerIndex = Math.floor(Math.random() * numParticipants);
+      for (let i = 0; i < numParticipants; i++) {
+        owedAmounts[i] = i === payerIndex ? round2(totalAmount) : 0.0;
       }
     } else {
-      throw new Error("Unknown split method");
+      throw new Error("Unsupported split method: " + splitMethod);
     }
+
+    let totalPaidSum = 0.0;
+    for (let i = 0; i < dbParticipants.length; i++) {
+      const row = dbParticipants[i];
+      const owed = owedAmounts[i];
+
+      await SplitBillParticipant.update(
+        {
+          amount_owed: owed,
+        },
+        {
+          where: { id: row.id },
+          transaction,
+        }
+      );
+
+      totalPaidSum += parseFloat(row.amount_paid || 0.0);
+    }
+
+    await SplitBill.update(
+      { total_participants: numParticipants, total_paid: round2(totalPaidSum) },
+      { where: { id: billRecord.id }, transaction }
+    );
+
+    return true;
   }
 
-  static async addParticipant(billId, userId) {
+  static async addParticipant(
+    billId,
+    { userId = null, guestName = null, guestPhone = null }
+  ) {
     return await sequelize.transaction(async (t) => {
       const bill = await SplitBill.findByPk(billId, {
         include: [{ model: SplitBillParticipant, as: "participants" }],
         transaction: t,
       });
+
       if (!bill) throw new Error("Bill not found");
       if (bill.is_finalized)
         throw new Error("Cannot add participant to a finalized bill.");
 
-      const exists = bill.participants.find((p) => p.user_id === userId);
-      if (exists) throw new Error("User already a participant");
+      if (!userId && !guestPhone)
+        throw new Error("Must provide either userId or guestPhone for guest");
+
+      if (userId) {
+        const user = await User.findByPk(userId, { transaction: t });
+        if (!user) throw new Error("User does not exist");
+
+        const exists = bill.participants.some((p) => p.user_id === userId);
+        if (exists) throw new Error("User already a participant");
+
+        if (bill.user_id === userId)
+          throw new Error("Bill owner is already a participant");
+      }
+
+      if (!userId && guestPhone) {
+        if (!guestName)
+          throw new Error("Guest name is required when adding a guest");
+
+        const exists = bill.participants.some(
+          (p) => p.user_id === null && p.guest_phone === guestPhone
+        );
+        if (exists) throw new Error("Guest already added");
+      }
 
       await SplitBillParticipant.create(
-        { split_bill_id: billId, user_id: userId },
+        {
+          split_bill_id: billId,
+          user_id: userId,
+          guest_name: guestName || null,
+          guest_phone: guestPhone || null,
+          percentage: null,
+          amount_owed: 0,
+        },
         { transaction: t }
       );
 
@@ -146,18 +311,37 @@ class SplitBillService {
     });
   }
 
-  static async removeParticipant(billId, userId) {
+  static async removeParticipant(billId, { userId = null, guestPhone = null }) {
     return await sequelize.transaction(async (t) => {
       const bill = await SplitBill.findByPk(billId, {
         include: [{ model: SplitBillParticipant, as: "participants" }],
         transaction: t,
       });
+
       if (!bill) throw new Error("Bill not found");
       if (bill.is_finalized)
         throw new Error("Cannot remove participant from a finalized bill.");
 
+      if (!userId && !guestPhone)
+        throw new Error("Must provide userId OR guestPhone");
+
+      const participant = bill.participants.find((p) => {
+        if (userId) return p.user_id === userId;
+        if (guestPhone)
+          return p.user_id === null && p.guest_phone === guestPhone;
+        return false;
+      });
+
+      if (!participant) throw new Error("Participant not found");
+
+      if (bill.participants.length <= 1)
+        throw new Error("Cannot remove the last remaining participant");
+
       await SplitBillParticipant.destroy({
-        where: { split_bill_id: billId, user_id: userId },
+        where: {
+          split_bill_id: billId,
+          ...(userId ? { user_id: userId } : { guest_phone: guestPhone }),
+        },
         transaction: t,
       });
 
@@ -192,9 +376,7 @@ class SplitBillService {
 
   static async getBillDetails(billId) {
     const bill = await SplitBill.findByPk(billId, {
-      include: [
-        { model: SplitBillParticipant, as: "participants" },
-      ],
+      include: [{ model: SplitBillParticipant, as: "participants" }],
     });
     if (!bill) throw new Error("Bill not found");
     return bill;

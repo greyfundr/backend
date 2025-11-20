@@ -14,6 +14,7 @@ const splitBillRoute = require("./Routes/endpoints/splitbill");
 const notificationRoutes = require("./Routes/endpoints/notifications");
 
 const path = require("path");
+const globalErrorHandler = require("./helpers/globalErrorHandler");
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -63,6 +64,8 @@ app.get("/createcampain", (req, res) => {
 app.get("/login", (req, res) => {
   res.sendFile(path.join(__dirname, "views", "login.html"));
 });
+
+app.use(globalErrorHandler);
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
