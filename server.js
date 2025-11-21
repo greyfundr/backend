@@ -1,6 +1,9 @@
 const express = require("express");
+const path = require("path");
 const app = express();
-const PORT = process.env.PORT || 3000; // Use environment variable or default to 3000
+const PORT = process.env.PORT || 3000;
+
+const globalErrorHandler = require("./helpers/globalErrorHandler");
 
 const userRoute = require("./Routes/endpoints/user");
 const authRoute = require("./Routes/endpoints/auth");
@@ -12,42 +15,24 @@ const followerRoute = require("./Routes/endpoints/follower");
 const walletRoute = require("./Routes/endpoints/wallets");
 const splitBillRoute = require("./Routes/endpoints/splitbill");
 const notificationRoutes = require("./Routes/endpoints/notifications");
-
-const path = require("path");
-const globalErrorHandler = require("./helpers/globalErrorHandler");
+const uploadRoute = require("./Routes/endpoints/upload");
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.use("/notifications", notificationRoutes);
 app.use(express.static(path.join(__dirname, "public")));
 
 app.use("/users", userRoute);
-app.use(express.static(path.join(__dirname, "public")));
-
-app.use("/split-bill", splitBillRoute);
-app.use(express.static(path.join(__dirname, "public")));
-
 app.use("/auth", authRoute);
-app.use(express.static(path.join(__dirname, "public")));
-
-app.use("/wallet", walletRoute);
-app.use(express.static(path.join(__dirname, "public")));
-
-app.use("/follower", followerRoute);
-app.use(express.static(path.join(__dirname, "public")));
-
-app.use("/champion", championRoute);
-app.use(express.static(path.join(__dirname, "public")));
-
-app.use("/campaign", campaignRoute);
-app.use(express.static(path.join(__dirname, "public")));
-
 app.use("/admin", adminRoute);
-app.use(express.static(path.join(__dirname, "public")));
-
 app.use("/backer", backerRoute);
-app.use(express.static(path.join(__dirname, "public")));
+app.use("/campaign", campaignRoute);
+app.use("/champion", championRoute);
+app.use("/follower", followerRoute);
+app.use("/wallet", walletRoute);
+app.use("/split-bill", splitBillRoute);
+app.use("/notifications", notificationRoutes);
+app.use("/upload", uploadRoute);
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "views", "main.html"));
@@ -57,7 +42,7 @@ app.get("/register", (req, res) => {
   res.sendFile(path.join(__dirname, "views", "register.html"));
 });
 
-app.get("/createcampain", (req, res) => {
+app.get("/createcampaign", (req, res) => {
   res.sendFile(path.join(__dirname, "views", "campaign.html"));
 });
 

@@ -1,14 +1,15 @@
 const { Sequelize, DataTypes } = require("sequelize");
 
-const sequelize = new Sequelize(
-  "nooraan1_greyfoundr",
-  "nooraan1_greyfoundr",
-  "SY8sgDCE4HXD",
-  {
-    host: "209.172.2.60",
-    dialect: "mysql",
-  }
-);
+const DB_NAME = process.env.DB_DATABASE || "database-name";
+const DB_USER = process.env.DB_USER || "username";
+const DB_PASSWORD = process.env.DB_PASSWORD || "password";
+const DB_HOST = process.env.DB_HOST || "host";
+
+const sequelize = new Sequelize(DB_NAME, DB_USER, DB_PASSWORD, {
+  host: DB_HOST,
+  port: 6379,
+  dialect: "mysql",
+});
 
 sequelize
   .authenticate()
