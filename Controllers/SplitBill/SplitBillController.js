@@ -40,7 +40,78 @@ const createSplitBill = async (req, res) => {
   }
 };
 
-const finalizeBill = async (req, res) => {
+const getUserSplitBills = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const result = await SplitBillService.getUserBills(userId);
+
+    return res.status(200).json({
+      msg: "User split bills retrieved successfully",
+      data: result,
+    });
+  } catch (error) {
+    console.error("Error fetching bill:", error);
+    next(error);
+  }
+};
+
+const addParticipant = async (req, res, next) => {
+  try {
+    const billId = req.params.id;
+    const { userId, guestName, guestPhone } = req.body;
+
+    await SplitBillService.addParticipant(billId, {
+      userId,
+      guestName,
+      guestPhone,
+    });
+
+    return res.status(200).json({
+      status: "success",
+      message: "Participant added successfully",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const removeParticipant = async (req, res, next) => {
+  try {
+    const billId = req.params.id;
+    const { userId, guestPhone } = req.body;
+
+    await SplitBillService.removeParticipant(billId, {
+      userId,
+      guestPhone,
+    });
+
+    return res.status(200).json({
+      status: "success",
+      message: "Participant removed successfully",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const applyPayment = async (req, res, next) => {
+  try {
+    const participantId = req.params.id;
+    const { amount } = req.body;
+
+    const result = await SplitBillService.applyPayment(participantId, amount);
+
+    res.status(200).json({
+      status: "success",
+      message: "Payment applied successfully",
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const finalizeBill = async (req, res, next) => {
   try {
     const billId = Number(req.params.id);
     const bill = await SplitBillService.finalizeBill(billId);
@@ -49,7 +120,7 @@ const finalizeBill = async (req, res) => {
 
     return res.status(200).json({ msg: "Bill finalized", data: bill });
   } catch (error) {
-    return res.status(400).json({ error: error.message });
+    next(error);
   }
 };
 
@@ -80,6 +151,10 @@ const finalizeBill = async (req, res) => {
 module.exports = {
   getSplitBill,
   createSplitBill,
+  getUserSplitBills,
+  addParticipant,
+  removeParticipant,
+  applyPayment,
   finalizeBill,
   // markPaid,
 };

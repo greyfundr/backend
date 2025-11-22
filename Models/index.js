@@ -1,11 +1,18 @@
 const sequelize = require("../Config/sequalize_db");
+const Payment = require("./payment");
 const SplitBill = require("./splitbill");
 const SplitBillParticipant = require("./splitBillParticipant");
-// const User = require("./user");
 
 SplitBill.hasMany(SplitBillParticipant, {
   foreignKey: "split_bill_id",
   as: "participants",
+  onDelete: "CASCADE",
+});
+
+SplitBill.hasMany(Payment, {
+  foreignKey: "participant_id",
+  through: SplitBillParticipant,
+  as: "payments",
 });
 
 SplitBillParticipant.belongsTo(SplitBill, {
@@ -13,6 +20,16 @@ SplitBillParticipant.belongsTo(SplitBill, {
   as: "bill",
 });
 
+SplitBillParticipant.hasMany(Payment, {
+  foreignKey: "participant_id",
+  as: "payments",
+  onDelete: "CASCADE",
+});
+
+Payment.belongsTo(SplitBillParticipant, {
+  foreignKey: "participant_id",
+  as: "participant",
+});
 
 // User.hasMany(SplitBill, { foreignKey: "creator_id", as: "createdBills" });
 // SplitBill.belongsTo(User, { foreignKey: "creator_id", as: "creator" });
@@ -23,4 +40,4 @@ SplitBillParticipant.belongsTo(SplitBill, {
 // });
 // SplitBillParticipant.belongsTo(User, { foreignKey: "user_id", as: "user" });
 
-module.exports = { sequelize, SplitBill, SplitBillParticipant };
+module.exports = { sequelize, SplitBill, SplitBillParticipant, Payment };

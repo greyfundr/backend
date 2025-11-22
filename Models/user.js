@@ -2,13 +2,32 @@ const pool = require("../dbconnect");
 const bcrypt = require("bcryptjs");
 
 class User {
-  static async create(email, password, phone, code) {
+  static async create(
+    email,
+    password,
+    phone,
+    code,
+    first_name,
+    last_name,
+    profile_pic,
+    rusername
+  ) {
     const hashedPassword = await bcrypt.hash(password, 10);
     const username = email;
     //const sql = 'INSERT INTO `users`(`email`,`phone`, `password_hash`) VALUES (?,?,?,?,?)'
     const [result] = await pool.execute(
-      "INSERT INTO users (email, password_hash, phone, username,verify_code) VALUES (?, ?,?,?,?)",
-      [email, hashedPassword, phone, username, code]
+      "INSERT INTO users (email, password_hash, phone, username,verify_code, first_name, last_name, profile_pic, rusername) VALUES (?, ?,?,?,?,?,?,?,?)",
+      [
+        email,
+        hashedPassword,
+        phone,
+        username,
+        code,
+        first_name,
+        last_name,
+        profile_pic,
+        rusername
+      ]
     );
 
     return result.insertId;

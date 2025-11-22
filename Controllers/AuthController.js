@@ -7,7 +7,7 @@ const very = require("../Controllers/VerificationController");
 
 // Register a new user
 exports.createUser = async (req, res) => {
-  const { email, password, phone } = req.body;
+  const { email, password, phone, first_name, last_name, profile_pic, rusername } = req.body;
   console.log(email);
 
   const code = generateVerificationCode();
@@ -19,7 +19,7 @@ exports.createUser = async (req, res) => {
   }
   try {
     console.log(phone);
-    let test = await User.create(email, password, phone, code);
+    let test = await User.create(email, password, phone, code, first_name, last_name, profile_pic, rusername);
 
     if (test) {
       if (test) {
@@ -69,7 +69,7 @@ exports.loginUser = async (req, res) => {
       expiresIn: "1h",
     });
 
-    res.status(200).json({ msg: "Logged in successfully", token });
+    res.status(200).json({ msg: "Logged in successfully", user, token });
   } catch (err) {
     //console.error(err.message);
     res.status(500).send("Server error");

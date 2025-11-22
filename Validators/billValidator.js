@@ -93,4 +93,13 @@ const createBillSchema = z
     }
   });
 
-module.exports = { createBillSchema, participantSchema };
+const applyPaymentSchema = z.object({
+  amount: z
+    .number({
+      required_error: "Amount is required",
+      invalid_type_error: "Amount must be a number",
+    })
+    .positive("Amount must be greater than zero"),
+});
+
+module.exports = { createBillSchema, participantSchema, applyPaymentSchema };

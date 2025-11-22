@@ -2,6 +2,7 @@ const {
   sequelize,
   SplitBill,
   SplitBillParticipant,
+  Payment,
 } = require("../Models/index");
 const User = require("../Models/user");
 const Op = require("sequelize");
@@ -86,6 +87,7 @@ class SplitBillService {
     dueDate = null,
     description = null,
     imageUrl = null,
+    billReceipt = null,
   }) {
     if (!title || !amount || !participants || participants.length === 0) {
       throw new Error("Missing required fields: title, amount, participants");
@@ -105,6 +107,7 @@ class SplitBillService {
           split_method: splitMethod,
           due_date: dueDate,
           image_url: imageUrl,
+          bill_receipt: billReceipt,
           total_participants: totalParticipantsCount,
         },
         { transaction: t }
@@ -133,13 +136,6 @@ class SplitBillService {
           };
         }
       });
-
-      console.log("ADDING PARTICIPANT TO BILL:", bill.id);
-
-      const exists = await SplitBill.findByPk(bill.id);
-      console.log("Bill Exists:", !!exists);
-
-      console.log("db rows", dbRows);
 
       await SplitBillParticipant.bulkCreate(dbRows, { transaction: t });
 
@@ -349,6 +345,86 @@ class SplitBillService {
     });
   }
 
+  static async applyPayment(participantId, amount, payerId = null) {
+    try {
+      return await sequelize.transaction(async (transaction) => {
+        const participant = await SplitBillParticipant.findOne({
+          where: { id: participantId },
+          transaction,
+          lock: transaction.LOCK.UPDATE,
+        });
+
+        if (!participant) throw new Error("Participant not found");
+
+        const incoming = Number(amount);
+        if (isNaN(incoming) || incoming <= 0)
+          throw new Error("Payment amount must be greater than zero");
+
+        const required = Number(participant.amount_owed);
+        const paid = Number(participant.amount_paid);
+        const remaining = required - paid;
+
+        if (incoming > remaining)
+          throw new Error(
+            `Payment exceeds remaining amount. Remaining: ${remaining}`
+          );
+
+        await Payment.create(
+          {
+            participant_id: participantId,
+            payer_id: payerId,
+            amount: incoming,
+          },
+          { transaction }
+        );
+
+        const newPaid = paid + incoming;
+        const isSettled = newPaid >= required;
+
+        await participant.update(
+          {
+            amount_paid: newPaid,
+            paid: isSettled,
+            status: isSettled ? "PAID" : "UNPAID",
+            paid_at: isSettled ? new Date() : participant.paid_at,
+          },
+          { transaction }
+        );
+
+        const splitBill = await SplitBill.findOne({
+          where: { id: participant.split_bill_id },
+          transaction,
+          lock: transaction.LOCK.UPDATE,
+        });
+
+        if (!splitBill) throw new Error("Parent split bill not found");
+
+        const newTotalPaid = Number(splitBill.total_paid) + incoming;
+        const isBillCompleted = newTotalPaid >= Number(splitBill.amount);
+
+        await splitBill.update(
+          {
+            total_paid: newTotalPaid,
+            status: isBillCompleted ? "completed" : splitBill.status,
+          },
+          { transaction }
+        );
+
+        return {
+          participantId,
+          amountPaid: newPaid,
+          amountOwed: required,
+          remainingAmount: required - newPaid,
+          participantPaidOff: isSettled,
+          splitBillTotalPaid: newTotalPaid,
+          payerId,
+        };
+      });
+    } catch (error) {
+      throw error;
+    }
+  }
+
   static async finalizeBill(billId) {
     return await sequelize.transaction(async (t) => {
       const bill = await SplitBill.findByPk(billId, {
@@ -380,6 +456,14 @@ class SplitBillService {
     });
     if (!bill) throw new Error("Bill not found");
     return bill;
+  }
+
+  static async getUserBills(userId) {
+    const bills = await SplitBill.findAll({
+      where: { creator_id: userId },
+      include: [{ model: SplitBillParticipant, as: "participants" }],
+    });
+    return bills;
   }
 
   static async listUserSplits(userId) {
