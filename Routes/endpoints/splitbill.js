@@ -1,15 +1,11 @@
 const express = require("express");
+const SplitBillController = require("../../Controllers/SplitBill/SplitBillController");
 const {
-  getSplitBill,
-  createSplitBill,
-  getUserSplitBills,
-  finalizeBill,
-  addParticipant,
-  removeParticipant,
-  applyPayment,
-  // markPaid,
-} = require("../../Controllers/SplitBill/SplitBillController");
-const { verifyToken, validateRequest } = require("../../middleware");
+  verifyToken,
+  validateRequest,
+  checkBillAccess,
+  checkBillOwnership,
+} = require("../../middleware");
 const {
   createBillSchema,
   applyPaymentSchema,
@@ -20,33 +16,73 @@ const router = express.Router();
 
 router.use(express.urlencoded({ extended: true }));
 
-router.get("/:id", verifyToken, getSplitBill);
+router.get(
+  "/:id",
+  verifyToken,
+  checkBillAccess,
+  SplitBillController.getSplitBill
+);
+
 router.post(
   "/create",
   verifyToken,
   validateRequest(createBillSchema),
-  createSplitBill
+  SplitBillController.createSplitBill
 );
-router.get("/", verifyToken, getUserSplitBills);
+
+router.get("/", verifyToken, SplitBillController.getUserSplitBills);
+
+router.patch(
+  "/:id",
+  verifyToken,
+  checkBillOwnership,
+  SplitBillController.updateBill
+);
+
+router.delete(
+  "/:id/cancel",
+  verifyToken,
+  checkBillOwnership,
+  SplitBillController.cancelBill
+);
+
 router.post(
   "/:id/participants",
   verifyToken,
+  checkBillOwnership,
   validateRequest(participantSchema),
-  addParticipant
+  SplitBillController.addParticipant
 );
+
 router.delete(
-  "/:id/participants",
+  "/:id/participants/:participantId",
   verifyToken,
-  validateRequest(participantSchema),
-  removeParticipant
+  checkBillOwnership,
+  SplitBillController.removeParticipant
 );
+
 router.post(
   "/participants/:id/payments",
   verifyToken,
   validateRequest(applyPaymentSchema),
-  applyPayment
+  SplitBillController.applyPayment
 );
-router.post("/:id/finalize", verifyToken, finalizeBill);
-// router.post("/:id/participants/:userId/paid", markPaid);
+
+router.post("/:id/finalize", verifyToken, SplitBillController.finalizeBill);
+
+router.get(
+  "/participants/:participantId",
+  verifyToken,
+  SplitBillController.getParticipantStatus
+);
+
+router.post("/invites/:inviteCode/accept", SplitBillController.acceptInvite);
+
+router.post(
+  "/:billId/reminders",
+  verifyToken,
+  checkBillOwnership,
+  SplitBillController.sendReminders
+);
 
 module.exports = router;

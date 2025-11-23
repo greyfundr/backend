@@ -1,5 +1,8 @@
+require("dotenv").config();
+
 const express = require("express");
 const path = require("path");
+const sequelize = require("./Config/sequalize_db");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -52,6 +55,23 @@ app.get("/login", (req, res) => {
 
 app.use(globalErrorHandler);
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+const startServer = async () => {
+  try {
+    await sequelize.authenticate();
+    console.log("✅ Database connection established successfully.");
+
+    console.log(
+      "⚠️  Use migrations for schema changes: npx sequelize-cli db:migrate"
+    );
+
+    app.listen(PORT, () => {
+      console.log(`🚀 Server is running on port ${PORT}`);
+      console.log(`📍 Environment: ${process.env.NODE_ENV || "development"}`);
+    });
+  } catch (error) {
+    console.error("❌ Unable to start server:", error);
+    process.exit(1);
+  }
+};
+
+startServer();

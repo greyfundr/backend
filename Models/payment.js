@@ -1,43 +1,6 @@
 const { DataTypes } = require("sequelize");
 const sequelize = require("../Config/sequalize_db");
 
-// const Payment = sequelize.define(
-//   "Payment",
-//   {
-//     id: {
-//       type: DataTypes.CHAR(36),
-//       primaryKey: true,
-//       defaultValue: DataTypes.UUIDV4,
-//       collate: "utf8mb4_bin",
-//     },
-//     participant_id: {
-//       type: DataTypes.CHAR(36),
-//       allowNull: false,
-//       references: {
-//         model: "split_bill_participants",
-//         key: "id",
-//       },
-//       onDelete: "CASCADE",
-//       collate: "utf8mb4_bin",
-//     },
-//     payer_id: {
-//       type: DataTypes.CHAR(36),
-//       allowNull: true,
-//       collate: "utf8mb4_bin",
-//     },
-//     amount: {
-//       type: DataTypes.DECIMAL(15, 2),
-//       allowNull: false,
-//       validate: { min: 0.01 },
-//     },
-//   },
-//   {
-//     tableName: "payments",
-//     freezeTableName: true,
-//     timestamps: true,
-//   }
-// );
-
 const Payment = sequelize.define(
   "Payment",
   {
@@ -50,20 +13,11 @@ const Payment = sequelize.define(
     participant_id: {
       type: DataTypes.CHAR(36),
       allowNull: false,
-      references: {
-        model: "split_bill_participants",
-        key: "id",
-      },
-      onDelete: "CASCADE",
       collate: "utf8mb4_bin",
     },
     payer_id: {
       type: DataTypes.CHAR(36),
       allowNull: true,
-      references: {
-        model: "users",
-        key: "id",
-      },
       collate: "utf8mb4_bin",
     },
     amount: {
@@ -101,25 +55,13 @@ const Payment = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
-    created_at: {
-      type: DataTypes.DATE,
-      allowNull: false,
-      defaultValue: DataTypes.NOW,
-    },
   },
   {
     tableName: "payments",
-    timestamps: true,
     underscored: true,
+    timestamps: true,
     createdAt: "created_at",
-    updatedAt: false,
-    indexes: [
-      { fields: ["participant_id"] },
-      { fields: ["payer_id"] },
-      { fields: ["transaction_reference"], unique: true },
-      { fields: ["payment_status"] },
-      { fields: ["created_at"] },
-    ],
+    updatedAt: "updated_at",
   }
 );
 

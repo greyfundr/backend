@@ -38,11 +38,11 @@ const SplitBill = sequelize.define(
     creator_id: {
       type: DataTypes.CHAR(36),
       allowNull: false,
-      collate: "utf8mb4_bin",
-      references: {
-        model: "users",
-        key: "id",
-      },
+      // collate: "utf8mb4_bin",
+      // references: {
+      //   model: "users",
+      //   key: "id",
+      // },
     },
     split_method: {
       type: DataTypes.ENUM("EVEN", "MANUAL", "PERCENTAGE", "RANDOM_PICK"),
@@ -96,7 +96,7 @@ const SplitBill = sequelize.define(
       },
     },
     source_bill_type: {
-      type: DataTypes.ENUM("invoice", "campaign", "request", "manual", null),
+      type: DataTypes.ENUM("invoice", "campaign", "request", "manual"),
       allowNull: true,
     },
     source_bill_id: {

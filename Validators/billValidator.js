@@ -3,7 +3,7 @@ const { z } = require("zod");
 const participantSchema = z
   .object({
     type: z.enum(["USER", "GUEST"]),
-    userId: z.uuid().optional(),
+    userId: z.number().optional(),
     name: z.string().min(2).max(50).optional(),
     phone: z
       .string()
@@ -16,7 +16,7 @@ const participantSchema = z
     if (data.type === "USER") {
       if (!data.userId) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: z.custom,
           message: "Registered users must provide a valid userId",
           path: ["userId"],
         });
@@ -26,14 +26,14 @@ const participantSchema = z
     if (data.type === "GUEST") {
       if (!data.name) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: z.custom,
           message: "Guest participants must have a name",
           path: ["name"],
         });
       }
       if (!data.phone) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: z.custom,
           message: "Guests must provide a phone number",
           path: ["phone"],
         });
@@ -48,7 +48,7 @@ const createBillSchema = z
     description: z.string().max(500).optional(),
     currency: z.string().length(3).default("NGN"),
     amount: z.number().positive("Amount must be greater than 0"),
-    creatorId: z.string().uuid().optional(),
+    creatorId: z.uuid().optional(),
     splitMethod: z.enum(["EVEN", "MANUAL", "RANDOM_PICK"]),
     dueDate: z
       .string()
@@ -84,7 +84,7 @@ const createBillSchema = z
         const diff = Math.abs(sum - data.amount);
         if (diff > 0.1) {
           ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: z.custom,
             message: `Participant amounts sum to ${sum}, but total bill is ${data.amount}`,
             path: ["amount"],
           });
@@ -99,7 +99,15 @@ const applyPaymentSchema = z.object({
       required_error: "Amount is required",
       invalid_type_error: "Amount must be a number",
     })
-    .positive("Amount must be greater than zero"),
+    .positive({ message: "Amount must be greater than zero" }),
+  paymentDetails: z.object({
+    payment_method: z.enum(
+      ["wallet", "card", "bank_transfer", "cash", "other"],
+      {
+        required_error: "Payment method is required",
+      }
+    ),
+  }),
 });
 
 module.exports = { createBillSchema, participantSchema, applyPaymentSchema };

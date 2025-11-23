@@ -49,7 +49,8 @@ const globalErrorHandler = (err, req, res, next) => {
     });
   }
 
-  const statusCode = err.status || 500;
+  const statusCode = err.statusCode || 500;
+  const status = err.status || "error";
   const errorMessage = err.message || "Internal Server Error";
 
   let cleanMessage = errorMessage;
@@ -61,7 +62,7 @@ const globalErrorHandler = (err, req, res, next) => {
   }
 
   return res.status(statusCode).json({
-    status: "error",
+    status,
     message: cleanMessage,
   });
 };

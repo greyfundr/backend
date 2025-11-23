@@ -9,12 +9,6 @@ SplitBill.hasMany(SplitBillParticipant, {
   onDelete: "CASCADE",
 });
 
-SplitBill.hasMany(Payment, {
-  foreignKey: "participant_id",
-  through: SplitBillParticipant,
-  as: "payments",
-});
-
 SplitBillParticipant.belongsTo(SplitBill, {
   foreignKey: "split_bill_id",
   as: "bill",
@@ -30,14 +24,5 @@ Payment.belongsTo(SplitBillParticipant, {
   foreignKey: "participant_id",
   as: "participant",
 });
-
-// User.hasMany(SplitBill, { foreignKey: "creator_id", as: "createdBills" });
-// SplitBill.belongsTo(User, { foreignKey: "creator_id", as: "creator" });
-
-// User.hasMany(SplitBillParticipant, {
-//   foreignKey: "user_id",
-//   as: "billParticipation",
-// });
-// SplitBillParticipant.belongsTo(User, { foreignKey: "user_id", as: "user" });
 
 module.exports = { sequelize, SplitBill, SplitBillParticipant, Payment };

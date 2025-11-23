@@ -21,8 +21,8 @@ const SplitBillParticipant = sequelize.define(
     user_id: {
       type: DataTypes.CHAR(36),
       allowNull: true,
-      references: { model: "users", key: "id" },
-      collate: "utf8mb4_bin",
+      // references: { model: "users", key: "id" },
+      // collate: "utf8mb4_bin",
     },
     guest_name: {
       type: DataTypes.STRING,
@@ -117,11 +117,6 @@ const SplitBillParticipant = sequelize.define(
       { fields: ["guest_phone"] },
       { fields: ["status"] },
       {
-        fields: ["invite_code"],
-        unique: true,
-        where: { invite_code: { [sequelize.Op.ne]: null } },
-      },
-      {
         unique: true,
         fields: ["split_bill_id", "user_id"],
         name: "unique_user_per_bill",
@@ -134,17 +129,19 @@ const SplitBillParticipant = sequelize.define(
     ],
     validate: {
       eitherUserOrGuest() {
-        const isUser = !!this.user_id;
-        const isGuest = !!this.guest_phone;
+        if (this.changed("user_id") || this.changed("guest_phone")) {
+          const isUser = !!this.user_id;
+          const isGuest = !!this.guest_phone;
 
-        if (!isUser && !isGuest) {
-          throw new Error(
-            "Participant must have either user_id or guest_phone"
-          );
-        }
+          if (!isUser && !isGuest) {
+            throw new Error(
+              "Participant must have either user_id or guest_phone"
+            );
+          }
 
-        if (isUser && isGuest) {
-          throw new Error("Participant cannot be both user and guest");
+          if (isUser && isGuest) {
+            throw new Error("Participant cannot be both user and guest");
+          }
         }
       },
     },
