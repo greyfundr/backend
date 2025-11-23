@@ -1,5 +1,27 @@
 const { z } = require("zod");
 
+const redistributionSchema = z
+  .object({
+    participantId: z.string().min(1, "participantId is required"),
+
+    amount: z.number().positive("Amount must be greater than zero").optional(),
+
+    percentage: z
+      .number()
+      .min(0, "Percentage must be at least 0")
+      .max(100, "Percentage cannot exceed 100")
+      .optional(),
+  })
+  .superRefine((entry, ctx) => {
+    if (!entry.amount && !entry.percentage) {
+      ctx.addIssue({
+        code: z.custom,
+        message: "Either amount or percentage must be provided",
+        path: ["amount", "percentage"],
+      });
+    }
+  });
+
 const participantSchema = z
   .object({
     type: z.enum(["USER", "GUEST"]),
@@ -10,7 +32,8 @@ const participantSchema = z
       .regex(/^\+?[0-9]{10,15}$/, "Invalid phone number")
       .optional(),
     amount: z.number().positive().optional(),
-    percent: z.number().min(0).max(100).optional(),
+    percentage: z.number().min(0).max(100).optional(),
+    redistribution: z.array(redistributionSchema).optional(),
   })
   .superRefine((data, ctx) => {
     if (data.type === "USER") {
@@ -31,6 +54,7 @@ const participantSchema = z
           path: ["name"],
         });
       }
+
       if (!data.phone) {
         ctx.addIssue({
           code: z.custom,
@@ -38,6 +62,13 @@ const participantSchema = z
           path: ["phone"],
         });
       }
+    }
+    if (data.redistribution && data.redistribution.length === 0) {
+      ctx.addIssue({
+        code: z.custom,
+        message: "Redistribution array cannot be empty",
+        path: ["redistribution"],
+      });
     }
   });
 

@@ -1,5 +1,6 @@
 const SplitBillService = require("../../Services/splitBillService");
 const NotificationService = require("../../Services/notificationService");
+const { SplitBill } = require("../../Models");
 
 const getSplitBill = async (req, res, next) => {
   try {
@@ -106,18 +107,43 @@ const updateBill = async (req, res, next) => {
 const addParticipant = async (req, res, next) => {
   try {
     const billId = req.params.id;
-    const { userId, guestName, guestPhone } = req.body;
-
-    const data = await SplitBillService.addParticipant(billId, {
+    const actorId = req.user.id;
+    const {
+      type,
       userId,
-      guestName,
-      guestPhone,
-    });
+      name,
+      phone,
+      email,
+      amount,
+      percentage,
+      redistribution,
+    } = req.body;
 
-    return res.status(200).json({
+    const participantData = {
+      userId: type === "USER" ? userId : null,
+      guestName: type === "GUEST" ? name : null,
+      guestPhone: type === "GUEST" ? phone : null,
+      guestEmail: email || null,
+      amount: amount ? parseFloat(amount) : null,
+      percentage: percentage ? parseFloat(percentage) : null,
+      redistribution: redistribution || null,
+    };
+
+    const result = await SplitBillService.addParticipant(
+      billId,
+      participantData,
+      actorId
+    );
+
+    return res.status(201).json({
       status: "success",
-      message: "Participant added successfully",
-      data,
+      message: result.message,
+      data: {
+        participant: result.participant,
+        splitMethod: result.splitMethod,
+        redistributed: result.redistributed,
+        adjustments: result.adjustments,
+      },
     });
   } catch (error) {
     next(error);
@@ -128,12 +154,24 @@ const removeParticipant = async (req, res, next) => {
   try {
     const { id: billId, participantId } = req.params;
     const actorId = req.user.id;
+    const { redistribution } = req.body;
 
-    await SplitBillService.removeParticipant(billId, participantId, actorId);
+    const result = await SplitBillService.removeParticipant(
+      billId,
+      participantId,
+      redistribution || null,
+      actorId
+    );
 
     return res.status(200).json({
-      success: true,
-      message: "Participant removed successfully",
+      status: "success",
+      message: result.message,
+      data: {
+        removedParticipant: result.removedParticipant,
+        remainingParticipants: result.remainingParticipants,
+        redistributed: result.redistributed,
+        adjustments: result.adjustments,
+      },
     });
   } catch (error) {
     next(error);

@@ -794,11 +794,9 @@ class SplitBillService {
       if (bill.is_finalized) {
         throw new AppError("Cannot update finalized bill", 400);
       }
-
       if (bill.status === "completed") {
         throw new AppError("Cannot update completed bill", 400);
       }
-
       if (bill.status === "cancelled") {
         throw new AppError("Cannot update cancelled bill", 400);
       }
@@ -812,6 +810,10 @@ class SplitBillService {
 
       const oldAmount = parseFloat(bill.amount);
       const oldSplitMethod = bill.split_method;
+      const newAmount = updates.amount ? parseFloat(updates.amount) : oldAmount;
+      const newSplitMethod = updates.split_method || oldSplitMethod;
+
+      const { participants: participantUpdates } = updates;
 
       const allowedUpdates = [
         "title",
@@ -831,7 +833,6 @@ class SplitBillService {
       });
 
       if (updates.amount !== undefined) {
-        const newAmount = parseFloat(updates.amount);
         if (isNaN(newAmount) || newAmount <= 0) {
           throw new AppError("Amount must be greater than zero", 400);
         }
@@ -844,36 +845,255 @@ class SplitBillService {
         }
       }
 
+      if (hasCriticalChanges) {
+        if (newSplitMethod === "MANUAL") {
+          if (!participantUpdates || !Array.isArray(participantUpdates)) {
+            throw new AppError(
+              `When updating to MANUAL split or changing amount, provide "participants" array: ` +
+                `[{ participantId: "uuid", amount: number }]. ` +
+                `Must include all ${
+                  bill.participants.length
+                } participants totaling ₦${newAmount.toFixed(2)}`,
+              400
+            );
+          }
+
+          if (participantUpdates.length !== bill.participants.length) {
+            throw new AppError(
+              `Must provide amounts for all ${bill.participants.length} participants`,
+              400
+            );
+          }
+
+          const existingIds = new Set(bill.participants.map((p) => p.id));
+          const providedIds = new Set(
+            participantUpdates.map((p) => p.participantId)
+          );
+
+          for (const update of participantUpdates) {
+            if (!existingIds.has(update.participantId)) {
+              throw new AppError(
+                `Invalid participantId: ${update.participantId}`,
+                400
+              );
+            }
+            if (!update.amount || update.amount < 0) {
+              throw new AppError(
+                `Invalid amount for participant ${update.participantId}`,
+                400
+              );
+            }
+          }
+
+          for (const participant of bill.participants) {
+            if (!providedIds.has(participant.id)) {
+              throw new AppError(
+                `Missing amount for participant: ${participant.id}`,
+                400
+              );
+            }
+          }
+
+          const totalAmount = participantUpdates.reduce(
+            (sum, p) => sum + parseFloat(p.amount),
+            0
+          );
+
+          if (Math.abs(totalAmount - newAmount) > 0.01) {
+            throw new AppError(
+              `Participant amounts total (₦${totalAmount.toFixed(
+                2
+              )}) must equal bill amount (₦${newAmount.toFixed(2)})`,
+              400
+            );
+          }
+
+          for (const update of participantUpdates) {
+            const participant = bill.participants.find(
+              (p) => p.id === update.participantId
+            );
+            const amountPaid = parseFloat(participant.amount_paid || 0);
+            const newOwed = parseFloat(update.amount);
+
+            if (amountPaid > newOwed + 0.01) {
+              throw new AppError(
+                `Cannot reduce ${
+                  participant.guest_name || "User"
+                }'s amount to ₦${newOwed.toFixed(2)}. ` +
+                  `They have already paid ₦${amountPaid.toFixed(
+                    2
+                  )}. Refund required.`,
+                400
+              );
+            }
+          }
+
+          for (const update of participantUpdates) {
+            const participant = bill.participants.find(
+              (p) => p.id === update.participantId
+            );
+            await participant.update(
+              { amount_owed: parseFloat(update.amount) },
+              { transaction: t }
+            );
+          }
+        }
+
+        if (newSplitMethod === "PERCENTAGE") {
+          if (!participantUpdates || !Array.isArray(participantUpdates)) {
+            throw new AppError(
+              `When updating to PERCENTAGE split, provide "participants" array: ` +
+                `[{ participantId: "uuid", percentage: number }]. ` +
+                `Must include all ${bill.participants.length} participants totaling 100%`,
+              400
+            );
+          }
+
+          if (participantUpdates.length !== bill.participants.length) {
+            throw new AppError(
+              `Must provide percentages for all ${bill.participants.length} participants`,
+              400
+            );
+          }
+
+          const existingIds = new Set(bill.participants.map((p) => p.id));
+          const providedIds = new Set(
+            participantUpdates.map((p) => p.participantId)
+          );
+
+          for (const update of participantUpdates) {
+            if (!existingIds.has(update.participantId)) {
+              throw new AppError(
+                `Invalid participantId: ${update.participantId}`,
+                400
+              );
+            }
+            if (
+              !update.percentage ||
+              update.percentage < 0 ||
+              update.percentage > 100
+            ) {
+              throw new AppError(
+                `Invalid percentage for participant ${update.participantId}`,
+                400
+              );
+            }
+          }
+
+          for (const participant of bill.participants) {
+            if (!providedIds.has(participant.id)) {
+              throw new AppError(
+                `Missing percentage for participant: ${participant.id}`,
+                400
+              );
+            }
+          }
+
+          const totalPercentage = participantUpdates.reduce(
+            (sum, p) => sum + parseFloat(p.percentage),
+            0
+          );
+
+          if (Math.abs(totalPercentage - 100) > 0.01) {
+            throw new AppError(
+              `Participant percentages total (${totalPercentage.toFixed(
+                2
+              )}%) must equal 100%`,
+              400
+            );
+          }
+
+          for (const update of participantUpdates) {
+            const participant = bill.participants.find(
+              (p) => p.id === update.participantId
+            );
+            await participant.update(
+              { percentage: parseFloat(update.percentage) },
+              { transaction: t }
+            );
+          }
+        }
+      }
+
       await bill.update(updateData, { transaction: t });
 
       let adjustmentResults = null;
 
       if (hasCriticalChanges) {
-        const participantInputs = bill.participants.map((p) => ({
-          type: p.user_id ? "USER" : "GUEST",
-          userId: p.user_id,
-          name: p.guest_name,
-          phone: p.guest_phone,
-          percentage: p.percentage,
-          amount: p.amount_owed,
-        }));
+        if (newSplitMethod === "EVEN" || newSplitMethod === "RANDOM_PICK") {
+          const participantInputs = bill.participants.map((p) => ({
+            type: p.user_id ? "USER" : "GUEST",
+            userId: p.user_id,
+            name: p.guest_name,
+            phone: p.guest_phone,
+            percentage: p.percentage,
+            amount: p.amount_owed,
+          }));
 
-        adjustmentResults = await this.computeAndSaveShares(
-          billId,
-          participantInputs,
-          updates.split_method || bill.split_method,
-          t
-        );
+          adjustmentResults = await this.computeAndSaveShares(
+            billId,
+            participantInputs,
+            newSplitMethod,
+            t
+          );
+        } else {
+          adjustmentResults = {
+            success: true,
+            adjustments: [],
+            hasRefundsRequired: false,
+            hasAdditionalPaymentsRequired: false,
+          };
+
+          const updatedParticipants = await SplitBillParticipant.findAll({
+            where: { split_bill_id: billId },
+            transaction: t,
+          });
+
+          for (const participant of updatedParticipants) {
+            const amountPaid = parseFloat(participant.amount_paid || 0);
+            const newOwed = parseFloat(participant.amount_owed);
+
+            if (amountPaid > newOwed + 0.01) {
+              adjustmentResults.hasRefundsRequired = true;
+              adjustmentResults.adjustments.push({
+                participantId: participant.id,
+                participantName: participant.guest_name || "User",
+                newOwed,
+                amountPaid,
+                overpaidAmount: amountPaid - newOwed,
+                action: "REFUND_REQUIRED",
+                message: `Refund of ₦${(amountPaid - newOwed).toFixed(
+                  2
+                )} required`,
+              });
+            } else if (amountPaid < newOwed - 0.01 && amountPaid > 0) {
+              adjustmentResults.hasAdditionalPaymentsRequired = true;
+              adjustmentResults.adjustments.push({
+                participantId: participant.id,
+                participantName: participant.guest_name || "User",
+                newOwed,
+                amountPaid,
+                additionalOwed: newOwed - amountPaid,
+                action: "ADDITIONAL_PAYMENT_REQUIRED",
+                message: `Additional ₦${(newOwed - amountPaid).toFixed(
+                  2
+                )} required`,
+              });
+            }
+          }
+        }
 
         const activityDescription = [];
         if (amountChanged) {
           activityDescription.push(
-            `Amount changed from ₦${oldAmount} to ₦${updates.amount}`
+            `Amount changed from ₦${oldAmount.toFixed(
+              2
+            )} to ₦${newAmount.toFixed(2)}`
           );
         }
         if (splitMethodChanged) {
           activityDescription.push(
-            `Split method changed from ${oldSplitMethod} to ${updates.split_method}`
+            `Split method changed from ${oldSplitMethod} to ${newSplitMethod}`
           );
         }
 
@@ -882,18 +1102,18 @@ class SplitBillService {
             split_bill_id: billId,
             actor_id: actorId,
             action_type: "updated",
-            description:
-              activityDescription.join(". ") + ". Shares recalculated.",
+            description: activityDescription.join(". ") + ". Shares updated.",
             metadata: {
               updates: Object.keys(updateData),
               oldAmount,
-              newAmount: updates.amount,
+              newAmount,
               oldSplitMethod,
-              newSplitMethod: updates.split_method,
-              adjustments: adjustmentResults.adjustments,
-              hasRefundsRequired: adjustmentResults.hasRefundsRequired,
+              newSplitMethod,
+              adjustments: adjustmentResults?.adjustments || [],
+              hasRefundsRequired:
+                adjustmentResults?.hasRefundsRequired || false,
               hasAdditionalPaymentsRequired:
-                adjustmentResults.hasAdditionalPaymentsRequired,
+                adjustmentResults?.hasAdditionalPaymentsRequired || false,
             },
           },
           { transaction: t }
@@ -930,7 +1150,9 @@ class SplitBillService {
           (adjustmentResults.hasRefundsRequired ||
             adjustmentResults.hasAdditionalPaymentsRequired),
         message: hasCriticalChanges
-          ? "Bill updated. Some participants may require payment adjustments."
+          ? adjustmentResults?.adjustments.length > 0
+            ? "Bill updated. Some participants may require payment adjustments."
+            : "Bill updated successfully."
           : "Bill updated successfully.",
       };
     });
@@ -951,22 +1173,211 @@ class SplitBillService {
       if (bill.is_finalized) {
         throw new AppError("Cannot add participant to finalized bill", 400);
       }
-
       if (bill.status === "cancelled") {
         throw new AppError("Cannot add participant to cancelled bill", 400);
       }
-
       if (bill.status === "completed") {
         throw new AppError("Cannot add participant to completed bill", 400);
       }
 
-      const { userId, guestName, guestPhone, guestEmail } = participantData;
+      const {
+        userId,
+        guestName,
+        guestPhone,
+        guestEmail,
+        amount,
+        percentage,
+        redistribution,
+      } = participantData;
 
       if (!userId && !guestPhone) {
         throw new AppError(
           "Must provide either userId or guestPhone for guest",
           400
         );
+      }
+
+      if (bill.split_method === "MANUAL") {
+        if (!amount || amount <= 0) {
+          throw new AppError(
+            "Amount is required when adding participant to MANUAL split bill",
+            400
+          );
+        }
+
+        const currentTotal = bill.participants.reduce(
+          (sum, p) => sum + parseFloat(p.amount_owed),
+          0
+        );
+        const billTotal = parseFloat(bill.amount);
+        const remaining = billTotal - currentTotal;
+
+        if (remaining < amount - 0.01) {
+          if (!redistribution || !Array.isArray(redistribution)) {
+            throw new AppError(
+              `Insufficient space. Bill total: ₦${billTotal.toFixed(2)}, ` +
+                `Already allocated: ₦${currentTotal.toFixed(2)}, ` +
+                `Available: ₦${remaining.toFixed(2)}, ` +
+                `Required: ₦${amount}. ` +
+                `Provide "redistribution" array: [{ participantId: "uuid", amount: number }]`,
+              400
+            );
+          }
+
+          if (redistribution.length !== bill.participants.length) {
+            throw new AppError(
+              `Redistribution must include all ${bill.participants.length} existing participants`,
+              400
+            );
+          }
+
+          const existingIds = new Set(bill.participants.map((p) => p.id));
+          const redistributionIds = new Set(
+            redistribution.map((r) => r.participantId)
+          );
+
+          for (const redist of redistribution) {
+            if (!existingIds.has(redist.participantId)) {
+              throw new AppError(
+                `Invalid participantId in redistribution: ${redist.participantId}`,
+                400
+              );
+            }
+            if (!redist.amount || redist.amount < 0) {
+              throw new AppError(
+                `Invalid amount in redistribution for participant ${redist.participantId}`,
+                400
+              );
+            }
+          }
+
+          const redistributionTotal = redistribution.reduce(
+            (sum, r) => sum + parseFloat(r.amount),
+            0
+          );
+          const expectedTotal = billTotal - amount;
+
+          if (Math.abs(redistributionTotal - expectedTotal) > 0.01) {
+            throw new AppError(
+              `Redistribution total (₦${redistributionTotal.toFixed(
+                2
+              )}) + new participant (₦${amount}) ` +
+                `must equal bill total (₦${billTotal.toFixed(2)}). ` +
+                `Expected redistribution total: ₦${expectedTotal.toFixed(2)}`,
+              400
+            );
+          }
+
+          for (const redist of redistribution) {
+            const participant = bill.participants.find(
+              (p) => p.id === redist.participantId
+            );
+            const newAmount = parseFloat(redist.amount);
+            const amountPaid = parseFloat(participant.amount_paid || 0);
+
+            if (amountPaid > newAmount + 0.01) {
+              throw new AppError(
+                `Cannot reduce ${
+                  participant.guest_name || "User"
+                }'s amount to ₦${newAmount.toFixed(2)}. ` +
+                  `They have already paid ₦${amountPaid.toFixed(
+                    2
+                  )}. Refund required first.`,
+                400
+              );
+            }
+
+            await participant.update(
+              { amount_owed: newAmount },
+              { transaction: t }
+            );
+          }
+        }
+      }
+
+      if (bill.split_method === "PERCENTAGE") {
+        if (!percentage || percentage <= 0 || percentage > 100) {
+          throw new AppError(
+            "Valid percentage (0-100) is required for PERCENTAGE split bill",
+            400
+          );
+        }
+
+        const currentPercentage = bill.participants.reduce(
+          (sum, p) => sum + parseFloat(p.percentage || 0),
+          0
+        );
+
+        if (currentPercentage + percentage > 100.01) {
+          if (!redistribution || !Array.isArray(redistribution)) {
+            throw new AppError(
+              `Insufficient percentage. Current: ${currentPercentage.toFixed(
+                2
+              )}%, ` +
+                `Adding: ${percentage}%, Total would be: ${(
+                  currentPercentage + percentage
+                ).toFixed(2)}%. ` +
+                `Provide "redistribution" array: [{ participantId: "uuid", percentage: number }]`,
+              400
+            );
+          }
+
+          if (redistribution.length !== bill.participants.length) {
+            throw new AppError(
+              `Redistribution must include all ${bill.participants.length} existing participants`,
+              400
+            );
+          }
+
+          const existingIds = new Set(bill.participants.map((p) => p.id));
+
+          for (const redist of redistribution) {
+            if (!existingIds.has(redist.participantId)) {
+              throw new AppError(
+                `Invalid participantId: ${redist.participantId}`,
+                400
+              );
+            }
+            if (
+              !redist.percentage ||
+              redist.percentage < 0 ||
+              redist.percentage > 100
+            ) {
+              throw new AppError(
+                `Invalid percentage for participant ${redist.participantId}`,
+                400
+              );
+            }
+          }
+
+          const redistributionTotal = redistribution.reduce(
+            (sum, r) => sum + parseFloat(r.percentage),
+            0
+          );
+          const expectedTotal = 100 - percentage;
+
+          if (Math.abs(redistributionTotal - expectedTotal) > 0.01) {
+            throw new AppError(
+              `Redistribution total (${redistributionTotal.toFixed(
+                2
+              )}%) + new participant (${percentage}%) ` +
+                `must equal 100%. Expected redistribution total: ${expectedTotal.toFixed(
+                  2
+                )}%`,
+              400
+            );
+          }
+
+          for (const redist of redistribution) {
+            const participant = bill.participants.find(
+              (p) => p.id === redist.participantId
+            );
+            await participant.update(
+              { percentage: parseFloat(redist.percentage) },
+              { transaction: t }
+            );
+          }
+        }
       }
 
       if (userId) {
@@ -1010,8 +1421,8 @@ class SplitBillService {
           guest_name: guestName || null,
           guest_phone: guestPhone || null,
           guest_email: guestEmail || null,
-          percentage: null,
-          amount_owed: 0,
+          percentage: percentage || null,
+          amount_owed: amount || 0,
           invite_code: generateInviteCode(),
           invite_expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
           invited_at: new Date(),
@@ -1019,25 +1430,29 @@ class SplitBillService {
         { transaction: t }
       );
 
-      const allParticipants = [...bill.participants, newParticipant];
-      const participantInputs = allParticipants.map((p) => ({
-        type: p.user_id ? "USER" : "GUEST",
-        userId: p.user_id,
-        name: p.guest_name,
-        phone: p.guest_phone,
-        percentage: p.percentage,
-        amount: p.amount_owed,
-      }));
+      let adjustmentResults = { success: true, adjustments: [] };
 
-      const adjustmentResults = await this.computeAndSaveShares(
-        billId,
-        participantInputs,
-        bill.split_method,
-        t
-      );
+      if (bill.split_method === "EVEN" || bill.split_method === "RANDOM_PICK") {
+        const allParticipants = [...bill.participants, newParticipant];
+        const participantInputs = allParticipants.map((p) => ({
+          type: p.user_id ? "USER" : "GUEST",
+          userId: p.user_id,
+          name: p.guest_name,
+          phone: p.guest_phone,
+          percentage: p.percentage,
+          amount: p.amount_owed,
+        }));
+
+        adjustmentResults = await this.computeAndSaveShares(
+          billId,
+          participantInputs,
+          bill.split_method,
+          t
+        );
+      }
 
       await bill.update(
-        { total_participants: allParticipants.length },
+        { total_participants: bill.participants.length + 1 },
         { transaction: t }
       );
 
@@ -1046,14 +1461,15 @@ class SplitBillService {
           split_bill_id: billId,
           actor_id: actorId,
           action_type: "participant_added",
-          description: `New participant added: ${
-            guestName || "User"
-          }. Shares recalculated for all participants.`,
+          description: `Participant added: ${guestName || "User"}`,
           metadata: {
             participantId: newParticipant.id,
             type: userId ? "USER" : "GUEST",
+            splitMethod: bill.split_method,
+            amount: amount || null,
+            percentage: percentage || null,
+            redistributed: !!redistribution,
             adjustments: adjustmentResults.adjustments,
-            hasRefundsRequired: adjustmentResults.hasRefundsRequired,
           },
         },
         { transaction: t }
@@ -1062,15 +1478,23 @@ class SplitBillService {
       return {
         participant: newParticipant,
         adjustments: adjustmentResults.adjustments,
-        message:
-          adjustmentResults.adjustments.length > 0
-            ? "Participant added. Existing participant amounts have been adjusted."
-            : "Participant added successfully.",
+        splitMethod: bill.split_method,
+        redistributed: !!redistribution,
+        message: redistribution
+          ? "Participant added with redistribution applied."
+          : adjustmentResults.adjustments.length > 0
+          ? "Participant added. Amounts recalculated."
+          : "Participant added successfully.",
       };
     });
   }
 
-  static async removeParticipant(billId, participantId, actorId = null) {
+  static async removeParticipant(
+    billId,
+    participantId,
+    redistributionData,
+    actorId = null
+  ) {
     return await sequelize.transaction(async (t) => {
       const participant = await SplitBillParticipant.findOne({
         where: {
@@ -1099,97 +1523,248 @@ class SplitBillService {
 
       const bill = participant.bill;
 
-      // Validation
       if (bill.is_finalized) {
         throw new AppError(
           "Cannot remove participant from finalized bill",
           400
         );
       }
-
       if (bill.status === "completed") {
         throw new AppError(
           "Cannot remove participant from completed bill",
           400
         );
       }
-
       if (bill.status === "cancelled") {
         throw new AppError(
           "Cannot remove participant from cancelled bill",
           400
         );
       }
-
       if (bill.participants.length <= 1) {
         throw new AppError("Cannot remove the last remaining participant", 400);
       }
 
-      // Check if participant has payments
       const amountPaid = parseFloat(participant.amount_paid);
-      const hasPayments = amountPaid > 0;
-
-      if (hasPayments) {
-        // Participant has made payments - mark for refund instead of blocking
+      if (amountPaid > 0) {
         throw new AppError(
-          `Cannot remove participant who has paid ₦${amountPaid}. Please process refund first or contact support.`,
+          `Cannot remove participant who has paid ₦${amountPaid.toFixed(2)}. ` +
+            `Process refund first or contact support.`,
           400
         );
       }
 
-      // Store info before deletion
+      const participantAmountOwed = parseFloat(participant.amount_owed);
+      const participantPercentage = parseFloat(participant.percentage || 0);
+
+      if (bill.split_method === "MANUAL" && participantAmountOwed > 0) {
+        if (!redistributionData || !Array.isArray(redistributionData)) {
+          const remainingParticipants = bill.participants.filter(
+            (p) => p.id !== participantId
+          );
+          throw new AppError(
+            `Removing participant with ₦${participantAmountOwed.toFixed(
+              2
+            )} requires redistribution. ` +
+              `Provide "redistribution" array with ${remainingParticipants.length} entries: ` +
+              `[{ participantId: "uuid", amount: number }]. ` +
+              `Total must be ₦${parseFloat(bill.amount).toFixed(2)}`,
+            400
+          );
+        }
+
+        const remainingParticipants = bill.participants.filter(
+          (p) => p.id !== participantId
+        );
+
+        if (redistributionData.length !== remainingParticipants.length) {
+          throw new AppError(
+            `Redistribution must include all ${remainingParticipants.length} remaining participants`,
+            400
+          );
+        }
+
+        const remainingIds = new Set(remainingParticipants.map((p) => p.id));
+
+        for (const redist of redistributionData) {
+          if (!remainingIds.has(redist.participantId)) {
+            throw new AppError(
+              `Invalid participantId: ${redist.participantId}`,
+              400
+            );
+          }
+          if (!redist.amount || redist.amount < 0) {
+            throw new AppError(
+              `Invalid amount for participant ${redist.participantId}`,
+              400
+            );
+          }
+        }
+
+        const redistributionTotal = redistributionData.reduce(
+          (sum, r) => sum + parseFloat(r.amount),
+          0
+        );
+        const billTotal = parseFloat(bill.amount);
+
+        if (Math.abs(redistributionTotal - billTotal) > 0.01) {
+          throw new AppError(
+            `Redistribution total (₦${redistributionTotal.toFixed(
+              2
+            )}) must equal bill total (₦${billTotal.toFixed(2)})`,
+            400
+          );
+        }
+
+        for (const redist of redistributionData) {
+          const p = remainingParticipants.find(
+            (p) => p.id === redist.participantId
+          );
+          const newAmount = parseFloat(redist.amount);
+          const paidAmount = parseFloat(p.amount_paid || 0);
+
+          if (paidAmount > newAmount + 0.01) {
+            throw new AppError(
+              `Cannot set ${
+                p.guest_name || "User"
+              }'s amount to ₦${newAmount.toFixed(2)}. ` +
+                `They have paid ₦${paidAmount.toFixed(2)}. Refund required.`,
+              400
+            );
+          }
+
+          await p.update({ amount_owed: newAmount }, { transaction: t });
+        }
+      }
+
+      if (bill.split_method === "PERCENTAGE" && participantPercentage > 0) {
+        if (!redistributionData || !Array.isArray(redistributionData)) {
+          const remainingParticipants = bill.participants.filter(
+            (p) => p.id !== participantId
+          );
+          throw new AppError(
+            `Removing participant with ${participantPercentage.toFixed(
+              2
+            )}% requires redistribution. ` +
+              `Provide "redistribution" array with ${remainingParticipants.length} entries: ` +
+              `[{ participantId: "uuid", percentage: number }]. ` +
+              `Total must be 100%`,
+            400
+          );
+        }
+
+        const remainingParticipants = bill.participants.filter(
+          (p) => p.id !== participantId
+        );
+
+        if (redistributionData.length !== remainingParticipants.length) {
+          throw new AppError(
+            `Redistribution must include all ${remainingParticipants.length} remaining participants`,
+            400
+          );
+        }
+
+        const remainingIds = new Set(remainingParticipants.map((p) => p.id));
+
+        for (const redist of redistributionData) {
+          if (!remainingIds.has(redist.participantId)) {
+            throw new AppError(
+              `Invalid participantId: ${redist.participantId}`,
+              400
+            );
+          }
+          if (
+            !redist.percentage ||
+            redist.percentage < 0 ||
+            redist.percentage > 100
+          ) {
+            throw new AppError(
+              `Invalid percentage for ${redist.participantId}`,
+              400
+            );
+          }
+        }
+
+        const redistributionTotal = redistributionData.reduce(
+          (sum, r) => sum + parseFloat(r.percentage),
+          0
+        );
+
+        if (Math.abs(redistributionTotal - 100) > 0.01) {
+          throw new AppError(
+            `Redistribution total (${redistributionTotal.toFixed(
+              2
+            )}%) must equal 100%`,
+            400
+          );
+        }
+
+        for (const redist of redistributionData) {
+          const p = remainingParticipants.find(
+            (p) => p.id === redist.participantId
+          );
+          await p.update(
+            { percentage: parseFloat(redist.percentage) },
+            { transaction: t }
+          );
+        }
+      }
+
       const participantInfo = {
         id: participant.id,
         type: participant.user_id ? "USER" : "GUEST",
         name: participant.user_id ? "user" : participant.guest_name,
         user_id: participant.user_id,
         guest_phone: participant.guest_phone,
-        amount_owed: parseFloat(participant.amount_owed),
+        amount_owed: participantAmountOwed,
+        percentage: participantPercentage,
       };
 
-      // Delete participant
       await participant.destroy({ transaction: t });
 
-      // Recalculate shares for remaining participants
-      const remainingParticipants = bill.participants.filter(
-        (p) => p.id !== participantId
-      );
+      let adjustmentResults = { success: true, adjustments: [] };
 
-      const participantInputs = remainingParticipants.map((p) => ({
-        type: p.user_id ? "USER" : "GUEST",
-        userId: p.user_id,
-        name: p.guest_name,
-        phone: p.guest_phone,
-        percentage: p.percentage,
-        amount: p.amount_owed,
-      }));
+      if (bill.split_method === "EVEN" || bill.split_method === "RANDOM_PICK") {
+        const remainingParticipants = bill.participants.filter(
+          (p) => p.id !== participantId
+        );
+        const participantInputs = remainingParticipants.map((p) => ({
+          type: p.user_id ? "USER" : "GUEST",
+          userId: p.user_id,
+          name: p.guest_name,
+          phone: p.guest_phone,
+          percentage: p.percentage,
+          amount: p.amount_owed,
+        }));
 
-      const adjustmentResults = await this.computeAndSaveShares(
-        billId,
-        participantInputs,
-        bill.split_method,
-        t
-      );
+        adjustmentResults = await this.computeAndSaveShares(
+          billId,
+          participantInputs,
+          bill.split_method,
+          t
+        );
+      }
 
-      // Update total participants
+      const remainingCount = bill.participants.length - 1;
       await bill.update(
-        { total_participants: remainingParticipants.length },
+        { total_participants: remainingCount },
         { transaction: t }
       );
 
-      // Log activity
       await SplitBillActivity.create(
         {
           split_bill_id: billId,
           actor_id: actorId,
           action_type: "participant_removed",
-          description: `Participant removed: ${participantInfo.name}. Shares recalculated for remaining participants.`,
+          description: `Participant removed: ${participantInfo.name}`,
           metadata: {
             participantId: participantInfo.id,
             type: participantInfo.type,
             userId: participantInfo.user_id,
             guestPhone: participantInfo.guest_phone,
             amountOwed: participantInfo.amount_owed,
+            percentage: participantInfo.percentage,
+            redistributed: !!redistributionData,
             adjustments: adjustmentResults.adjustments,
           },
         },
@@ -1199,12 +1774,14 @@ class SplitBillService {
       return {
         success: true,
         removedParticipant: participantInfo,
-        remainingParticipants: remainingParticipants.length,
+        remainingParticipants: remainingCount,
         adjustments: adjustmentResults.adjustments,
-        message:
-          adjustmentResults.adjustments.length > 0
-            ? "Participant removed. Remaining participant amounts have been adjusted."
-            : "Participant removed successfully.",
+        redistributed: !!redistributionData,
+        message: redistributionData
+          ? "Participant removed with redistribution applied."
+          : adjustmentResults.adjustments.length > 0
+          ? "Participant removed. Amounts recalculated."
+          : "Participant removed successfully.",
       };
     });
   }
@@ -1302,7 +1879,6 @@ class SplitBillService {
     splitData,
     creatorId
   ) {
-    // Fetch source bill data based on type
     let sourceBill;
 
     switch (sourceBillType) {
