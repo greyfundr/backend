@@ -7,26 +7,80 @@
 // - In production, always hash passwords (e.g., using bcrypt) and add input validation (e.g., using Joi or express-validator).
 // - These controllers handle basic operations: GET all Backers, GET by ID, POST create, PUT update, DELETE by ID.
 
-const con = require('../../dbconnect');
+const pool = require('../../dbconnect');
 const crypto = require('crypto');
 
 
 
 // Get all Backers
 const getBackers = async (req, res) => {
+  const con = await pool.getConnection();
+  
   try {
+          
           console.log("TEST DATA :");
-          con.query("SELECT * FROM Backers", function (err, result, fields) {
-                if (err) throw err;
-                console.log(result); // result will contain the fetched data
-                res.send(result);
-              }); 
-             // res.status(200).json(result);
-  } catch (error) {
-    console.error('Error fetching Backers:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
+          const result = await con.execute("SELECT * FROM backers")
+          backers = result[0];
+          const backeDetails = await fetchDataAndSaveToArray(backers);
+          console.log(backeDetails);
+          res.status(200).json(backeDetails);
+         // console.log(backers); // result will contain the fetched data   // res.status(200).json(result);
+      } catch (error) {
+        console.error('Error fetching users:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+      finally
+      {
+        con.release();
+        
+      }
+  //res.status(200).json(u);
 };
+
+
+async function fetchDataAndSaveToArray(backers) {
+  const con = await pool.getConnection();
+    const idsToQuery = backers; // Example array of IDs to query
+    const resultsArray = [];
+
+    // Create an array of promises for each database query
+    const queryPromises = idsToQuery.map(async (id) => {
+      
+         ids = id.backer_id;    
+         
+        const query = `SELECT id,first_name,username,profile_pic FROM users WHERE id = ?`;
+        return new Promise((resolve, reject) => {
+
+        const results = con.execute('SELECT id,first_name,username,profile_pic FROM users WHERE id = ?',
+            [ids]);
+
+           
+                resolve(results);
+            
+        });
+    });
+
+    try {
+        // Wait for all promises to resolve
+        const allResults = await Promise.all(queryPromises);
+
+        // Flatten the array of results (as each query might return an array of rows)
+        allResults.forEach(result => {
+            resultsArray.push(...result[0]);
+        });
+
+        //console.log('All results:', resultsArray);
+        return resultsArray;
+
+    } catch (error) {
+        console.error('Error executing queries:', error);
+        throw error;
+    } finally {
+        con.release(); // Close the connection when done
+    }
+}
+
+
 
 // Get Backer by ID
 const getBackerById = async (req, res) => {

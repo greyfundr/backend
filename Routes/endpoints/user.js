@@ -16,9 +16,9 @@ router.use(express.urlencoded({ extended: true }));
 // Routes
 router.get('/', getUsers);
 router.get('/getUser/:id', getUserById);
-router.post('/', createUser);
-router.put('/:id', updateUser);
-router.delete('/:id', deleteUser);
+router.post('/createUser', createUser);
+router.put('/updateUser/:id', updateUser);
+router.delete('/deleteUser:id', deleteUser);
 
 
 

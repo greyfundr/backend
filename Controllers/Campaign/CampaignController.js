@@ -51,6 +51,8 @@ const getCampaigns = async (req, res) => {
 const getCampaignById = async (req, res) => {
 
   const { id } = req.params;
+
+  console.log(id);
   try {
     const con = await pool.getConnection();
 
@@ -104,8 +106,8 @@ const viewDetails = async(req,res) =>
     
     console.log(`Processing file: ${file.originalname}`);
     img.push(key);
-    //const saved = await saveimage(bucket,key,body);
-    //console.log(saved)
+    const saved = await saveimage(bucket,key,body);
+    console.log(saved)
     // Example: move file, resize image, store data in database
     // fs.renameSync(file.path, `/new/destination/${file.filename}`);
   }
@@ -197,16 +199,18 @@ const createCampaign  = async (req, res) => {
     } 
     
    stringImages = img.join(',');
-   
+   console.log(stringImages);
   try {
     // In production: const hashedPassword = await bcrypt.hash(password, 10);
       console.log(id);
       console.log(title);
-      console.log(description);
+      console.log(amount);
+      console.log(hosts);
+      console.log(img[0]);
       const sql = "INSERT INTO `campaigns`( `creator_id`, `title`, `description`,`start_date`, `end_date`, `goal_amount`, `current_amount`,`approved`,`host`,`images`,`category`,`image`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)";
-      const values = [id,title,description,converts,convert,amount,0,false,hosts,stringImages,'nature',img[0]]
+      const values = [id,title,description,converts,convert,amount,0,0,hosts,stringImages,'nature',img[0]]
       const result = await con.execute(sql,values);
-      
+      console.log(result);
      console.log(stringImages);
       
       const message = 'You were added as a host to a new campaign';
@@ -220,7 +224,7 @@ const createCampaign  = async (req, res) => {
   
      
       
-      res.status(200).json({ msg: 'Campaign Created successfully', id: result[0].insertId });
+     // res.status(200).json({ msg: 'Campaign Created successfully', id: result[0].insertId });
     
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {

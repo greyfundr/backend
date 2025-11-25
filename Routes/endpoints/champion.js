@@ -8,18 +8,18 @@ const {
   updateChampion ,
   deleteChampion ,
 } = require('../../Controllers/Champion/ChampionController');
-
+const { verifyToken } = require("../../middleware/auth");
 
 
 router.use(express.urlencoded({ extended: true }));
 
 // Routes
 router.get('/', getChampions);
-router.get('/:id', getChampionById);
-router.post('/', createChampion);
-router.put('/:id', updateChampion);
-router.delete('/:id', deleteChampion);
-module.exports = router;
+router.get('/getChampion/:id',verifyToken, getChampionById);
+router.post('/create', verifyToken, createChampion);
+router.put('/update/:id',verifyToken, updateChampion);
+router.delete('/delete/:id',verifyToken, deleteChampion);
+
 
 
 module.exports = router;
