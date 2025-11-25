@@ -1,6 +1,7 @@
 const pool = require("../dbconnect");
 const bcrypt = require("bcryptjs");
 
+//const pool = await pools.getConnection();
 class User {
   static async create(
     email,
@@ -26,7 +27,7 @@ class User {
         first_name,
         last_name,
         profile_pic,
-        rusername
+        rusername,
       ]
     );
 

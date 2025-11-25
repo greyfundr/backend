@@ -4,11 +4,23 @@ const con = require("../dbconnect");
 const crypto = require("crypto");
 const User = require("../Models/user");
 const very = require("../Controllers/VerificationController");
+const Wallet = require("../Controllers/Wallet/WalletController");
 
 // Register a new user
 exports.createUser = async (req, res) => {
-  const { email, password, phone, first_name, last_name, profile_pic, rusername } = req.body;
+  const {
+    email,
+    password,
+    phone,
+    first_name,
+    last_name,
+    profile_pic,
+    rusername,
+  } = req.body;
   console.log(email);
+
+  phones = "+234" + phone;
+  console.log(phones);
 
   const code = generateVerificationCode();
 
@@ -19,13 +31,22 @@ exports.createUser = async (req, res) => {
   }
   try {
     console.log(phone);
-    let test = await User.create(email, password, phone, code, first_name, last_name, profile_pic, rusername);
+    let test = await User.create(
+      email,
+      password,
+      phone,
+      code,
+      first_name,
+      last_name,
+      profile_pic,
+      rusername
+    );
 
     if (test) {
       if (test) {
         console.log(code);
-        very.sendWhatsapp(phone, code);
-        res.json({ message: "Verification Code Sent to" + phone });
+        very.sendWhatsapp(phones, code);
+        res.json({ message: "Verification Code Sent to" + phones });
       }
     }
   } catch (err) {
@@ -49,12 +70,16 @@ exports.loginUser = async (req, res) => {
 
   try {
     // Check if user exists
+    console.log(email);
+    console.log(password);
+    console.log("Not Found");
+
     let user = await User.findByEmail(email);
     if (!user) {
       return res.status(400).json({ msg: "Invalid Email or Phone" });
     }
 
-    console.log(user);
+    console.log(user.id);
 
     // Compare passwords
     const isMatch = await bcrypt.compare(password, user.password_hash);
@@ -62,11 +87,15 @@ exports.loginUser = async (req, res) => {
     if (!isMatch) {
       return res.status(400).json({ msg: "Incorrect Password" });
     }
+    console.log(isMatch);
+    let user_wallet = await Wallet.getUserWallet(user.id);
+
+    console.log(user_wallet);
 
     // Generate token
-    const payload = { user: user };
+    const payload = { user: user, wallet: user_wallet };
     const token = jwt.sign(payload, process.env.JWT_SECRET, {
-      expiresIn: "1h",
+      expiresIn: "2h",
     });
 
     res.status(200).json({ msg: "Logged in successfully", user, token });
@@ -79,8 +108,6 @@ exports.loginUser = async (req, res) => {
 exports.verify = async (req, res) => {
   const { code, email } = req.body;
 
-  console.log(code);
-  console.log(email);
   try {
     // Check if user exists
     let user = await User.findByEmail(email);
@@ -103,7 +130,7 @@ exports.verify = async (req, res) => {
 
 exports.updateDetails = async (req, res) => {
   const { id, first_name, last_name, username, rUsername } = req.body;
-
+  const currency = "Naira";
   console.log(id);
   console.log(first_name);
   try {
@@ -115,6 +142,10 @@ exports.updateDetails = async (req, res) => {
       username,
       rUsername
     );
+
+    let wallet = await Wallet.createWallet(id, currency);
+
+    console.log(wallet);
 
     res.status(200).json({ message: "Updated successfully", id: user.id });
   } catch (err) {

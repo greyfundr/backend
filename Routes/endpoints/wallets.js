@@ -1,25 +1,23 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const con = require('../../dbconnect');
+const con = require("../../dbconnect");
 const {
   getWallet,
-  getWalletById,
-  createWallet ,
-  updateWallet ,
-  deleteWallet ,
-} = require('../../Controllers/Wallet/WalletController');
-
-
+  getWallets,
+  createWallet,
+  addFunds,
+  deleteWallet,
+  removeFunds,
+} = require("../../Controllers/Wallet/WalletController");
 
 router.use(express.urlencoded({ extended: true }));
 
 // Routes
-router.get('/', getWallet);
-router.get('/:id', getWalletById);
-router.post('/', createWallet);
-router.put('/:id', updateWallet);
-router.delete('/:id', deleteWallet);
-
-
+router.get("/", getWallets);
+router.get("/getWallet:id", getWallet);
+router.post("/create", createWallet);
+router.put("/addFunds:id", addFunds);
+router.put("/removeFunds:id", removeFunds);
+router.delete("/:id", deleteWallet);
 
 module.exports = router;

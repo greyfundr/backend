@@ -87,7 +87,7 @@ function generateVerificationCode() {
 // Update user by ID
 const updateUser  = async (req, res) => {
   const { id } = req.params;
-  const { name, email, password } = req.body;
+  const { first_name, last_name, username } = req.body;
   if (!name && !email && !password) {
     return res.status(400).json({ error: 'At least one field (name, email, or password) must be provided' });
   }
@@ -95,17 +95,32 @@ const updateUser  = async (req, res) => {
     // In production: if (password) { const hashedPassword = await bcrypt.hash(password, 10); }
     const updateFields = [];
     const values = [];
-    if (name) {
-      updateFields.push('name = ?');
-      values.push(name);
+    if (req.file)
+    {
+      const key = `images/${Date.now()}-${req.file.originalname}`
+      const bucket = 'greyfundr'
+      const body = req.file.buffer;
+      const type = req.file.mimetype
+
+      const saved = await saveimage(bucket,key,body);
+      console.log(saved)
+
     }
-    if (email) {
-      updateFields.push('email = ?');
-      values.push(email);
+    if (first_name) {
+      updateFields.push('first_name = ?');
+      values.push(first_name);
     }
-    if (password) {
-      updateFields.push('password = ?');
-      values.push(password); // Use hashedPassword in production
+    if (last_name) {
+      updateFields.push('last_name = ?');
+      values.push(last_name);
+    }
+    if (username) {
+      updateFields.push('username = ?');
+      values.push(username); // Use hashedPassword in production
+    }
+    if (profile_pic) {
+      updateFields.push('profile_pic = ?');
+      values.push(profile_pic); // Use hashedPassword in production
     }
     values.push(id);
 
@@ -126,6 +141,32 @@ const updateUser  = async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+const saveimage = async (bucket, key, body ) => {
+const upload = new Upload({
+          client: r2,
+          params: {
+            Bucket: bucket,
+            Key: key,
+            Body: body, // The readable stream
+            // You can add other S3 PutObjectCommand parameters here, e.g., ContentType
+            // ContentType: 'application/octet-stream',
+          },
+        });
+      
+        upload.on("httpUploadProgress", (progress) => {
+          console.log(progress); // Log upload progress
+        });
+      
+        try {
+          const data = await upload.done();
+          console.log("Upload successful:", data);
+          return data;
+        } catch (error) {
+          console.error("Error uploading file:", error);
+          throw error;
+        }
+  }
 
 // Delete user by ID
 const deleteUser  = async (req, res) => {

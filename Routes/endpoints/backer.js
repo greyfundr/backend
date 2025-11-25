@@ -8,18 +8,18 @@ const {
   updateBacker ,
   deleteBacker ,
 } = require('../../Controllers/Backer/BackerController');
-
+const { verifyToken } = require("../../middleware/auth");
 
 
 router.use(express.urlencoded({ extended: true }));
 
 // Routes
-router.get('/', getBackers);
-router.get('/:id', getBackerById);
-router.post('/', createBacker);
-router.put('/:id', updateBacker);
-router.delete('/:id', deleteBacker);
-module.exports = router;
+router.get('/',getBackers);
+router.get('/getBacker/:id',verifyToken, getBackerById);
+router.post('/create',verifyToken, createBacker);
+router.put('/update/:id',verifyToken, updateBacker);
+router.delete('/delete/:id',verifyToken, deleteBacker);
+
 
 
 module.exports = router;

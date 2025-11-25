@@ -4,8 +4,8 @@ const mysql = require("mysql2/promise"); // Using mysql2 with promises
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
-  port: 6379,
   user: process.env.DB_USER,
+  port: process.env.DB_PORT,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_DATABASE,
   waitForConnections: true, // If true, the pool will queue requests when no connections are available

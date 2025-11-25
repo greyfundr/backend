@@ -7,26 +7,75 @@
 // - In production, always hash passwords (e.g., using bcrypt) and add input validation (e.g., using Joi or express-validator).
 // - These controllers handle basic operations: GET all Champions, GET by ID, POST create, PUT update, DELETE by ID.
 
-const con = require('../../dbconnect');
+const pool = require('../../dbconnect');
 const crypto = require('crypto');
 
 
 
 // Get all Champions
-const getChampions = async (req, res) => {
+  const getChampions = async (req, res) => {
+  const con = await pool.getConnection();
+  let users = [];
   try {
           console.log("TEST DATA :");
-          con.query("SELECT * FROM Champions", function (err, result, fields) {
-                if (err) throw err;
-                console.log(result); // result will contain the fetched data
-                res.send(result);
-              }); 
+          const result = await con.execute("SELECT * FROM champions")
+          
+            const user = await fetchDataAndSaveToArray(result[0])
+            res.status(200).json(user);
+            
              // res.status(200).json(result);
   } catch (error) {
-    console.error('Error fetching Champions:', error);
+    console.error('Error fetching users:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
+  finally
+  {
+    con.release();
+  }
 };
+
+async function fetchDataAndSaveToArray(backers) {
+  const con = await pool.getConnection();
+    const idsToQuery = backers; // Example array of IDs to query
+    const resultsArray = [];
+
+    // Create an array of promises for each database query
+    const queryPromises = idsToQuery.map(async (id) => {
+      
+         ids = id.champion_id;    
+         console.log(ids);
+        const query = `SELECT id,first_name,username,profile_pic FROM users WHERE id = ?`;
+        return new Promise((resolve, reject) => {
+
+        const results = con.execute('SELECT id,first_name,username,profile_pic FROM users WHERE id = ?',
+            [ids]);
+
+                
+                resolve(results);
+            
+        });
+    });
+
+    try {
+        // Wait for all promises to resolve
+        const allResults = await Promise.all(queryPromises);
+
+        // Flatten the array of results (as each query might return an array of rows)
+        allResults.forEach(result => {
+            console.log(result);
+            resultsArray.push(...result[0]);
+        });
+
+        console.log('All results:', resultsArray);
+        return resultsArray;
+
+    } catch (error) {
+        console.error('Error executing queries:', error);
+        throw error;
+    } finally {
+        con.release(); // Close the connection when done
+    }
+}
 
 // Get Champion by ID
 const getChampionById = async (req, res) => {
@@ -46,23 +95,22 @@ const getChampionById = async (req, res) => {
 
 // Create a new Champion
 const createChampion  = async (req, res) => {
-  const { name, email, Championname,password,phone } = req.body;
-  const ChampionId = crypto.randomUUID();
-  const currentDate = new Date();
-  if (!name || !email || !password) {
-    return res.status(400).json({ error: 'Name, email, and password are required' });
+  const { userid, championid, amount } = req.body;
+
+  if (!userid || !championid) {
+    return res.status(400).json({ error: 'UserId and Championidare required' });
   }
   try {
     // In production: const hashedPassword = await bcrypt.hash(password, 10);
-      const sql = 'INSERT INTO `Champions`( `full_name`, `Championname`, `email`,`phone`, `password_hash`) VALUES (?,?,?,?,?)'
-    con.query(sql,[name,Championname,email,phone,password], function (err, result, fields) {
+      const sql = 'INSERT INTO `Champions`( `user_id`, `champion_id`, `amount`) VALUES (?,?,?)'
+    con.query(sql,[userid,championid,amount], function (err, result, fields) {
       if (err) throw err;
       console.log(result); // result will contain the fetched data
       res.send('Champion registered successfully!');
     });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
-      return res.status(409).json({ error: 'Email already exists' });
+      return res.status(409).json({ error: 'Champion already exists' });
     }
     console.error('Error creating Champion:', error);
     res.status(500).json({ error: 'Internal server error' });
