@@ -21,7 +21,7 @@ const getSplitBill = async (req, res, next) => {
   }
 };
 
-const createSplitBill = async (req, res) => {
+const createSplitBill = async (req, res, next) => {
   try {
     const creatorId = req.user.id;
     const bill = await SplitBillService.createBill({
@@ -29,7 +29,7 @@ const createSplitBill = async (req, res) => {
       ...req.body,
     });
 
-    await NotificationService.notifyParticipantsCreated(bill);
+    await NotificationService.notifyParticipantsCreated(bill, creatorId);
 
     return res.status(201).json({
       msg: "Split bill created successfully",
@@ -37,7 +37,7 @@ const createSplitBill = async (req, res) => {
     });
   } catch (error) {
     console.error("Error creating bill:", error);
-    next(err);
+    next(error);
   }
 };
 
@@ -94,6 +94,8 @@ const updateBill = async (req, res, next) => {
 
     const bill = await SplitBillService.updateBill(billId, req.body, userId);
 
+    await NotificationService.billUpdated(bill, userId);
+
     return res.status(200).json({
       success: true,
       message: "Bill updated successfully",
@@ -135,6 +137,12 @@ const addParticipant = async (req, res, next) => {
       actorId
     );
 
+    await NotificationService.participantAdded(
+      billId,
+      result.participant,
+      actorId
+    );
+
     return res.status(201).json({
       status: "success",
       message: result.message,
@@ -160,6 +168,12 @@ const removeParticipant = async (req, res, next) => {
       billId,
       participantId,
       redistribution || null,
+      actorId
+    );
+
+    await NotificationService.participantRemoved(
+      billId,
+      result.removedParticipant,
       actorId
     );
 
@@ -190,6 +204,8 @@ const applyPayment = async (req, res, next) => {
       payerId,
       paymentDetails
     );
+
+    await NotificationService.paymentApplied(result, payerId);
 
     return res.status(200).json({
       status: "success",
@@ -344,5 +360,4 @@ module.exports = {
   cancelBill,
   acceptInvite,
   sendReminders,
-  // markPaid,
 };
