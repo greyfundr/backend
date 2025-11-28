@@ -58,51 +58,135 @@ function generateAnonymus() {
 exports.loginUser = async (req, res) => {
   const { email, password } = req.body;
 
-    
+    if (!email ||  !password) {
+      return res.status(400).json({ msg: "Invalid Email or Phone" });
+    }
 
   try {
-    // Check if user exists
-    console.log(email);
-  console.log(password);
-  console.log('Not Found');
-  
-    let user = await User.findByEmail(email);
+     
+   
+        await checkLogin(email,password).then(
+      function(result) {
+        console.log("Promise fulfilled with:", result);
+        if(result)
+        {
+
+          const token = jwt.sign(result, process.env.JWT_SECRET, {
+         expiresIn: "2h",
+         });
+        res.status(200).json({ msg: "Logged in successfully", token });
+
+        }
+        else
+        {
+          res.status(400).json({ msg: "Login Error"});
+        }
+        
+      },
+      function(error) {
+        console.error("Promise rejected with:", error);
+      }
+    ); 
+    
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send("Server error");
+  }
+};
+
+const checkLogin = async(email,password) =>
+{
+
+
+  try{
+
+  let user = await User.findByEmail(email);
     if (!user) {
-      return res.status(400).json({ msg: "Invalid Email or Phone" });
+      console.log("user Not FOund")
+      return res.status(400).json({ msg: "User Not FOund" });
     }
 
     console.log(user.id);
 
     // Compare passwords
-    const isMatch = await bcrypt.compare(password, user.password_hash);
-    
-    if (!isMatch) {
-      return res.status(400).json({ msg: "Incorrect Password" });
-    }
-    console.log(isMatch);
-    let user_wallet = await Wallet.getUserWallet(user.id);
+     
+      let userWallet =  await getUserWallet(user.id);
+      let payload
+      console.log(password)
+      await checkPassword(password,user.password_hash).then(
 
-    if(!user_wallet)
-    {
-      let user_wallet = await Wallet.createWallet(user.id,'Naira');
-      return res.status(400).json({ msg: "No User Wallet Found" });
+      function(result) {
+        if(result)
+        {
+           console.log("Promise fulfilled with:", result);
+          payload = { user: user, wallet: userWallet};
+        }
+
+        else
+        {
+          payload = false;
+        }
+      },
+      function(error) {
+        console.error("Promise rejected with:", error);
+        
+      }
+    );
       
+
+      
+
+      return payload
+  }
+  catch(error)
+  {
+    console.log(error)
+  }
+
+}
+
+
+const checkPassword = async(password,lpassword) =>
+{
+     try
+    {
+    const isMatch = await bcrypt.compare(password, lpassword);
+      if (!isMatch) {
+        return false;
+      }
+      else
+        return true;
+    }
+    catch(error)
+    {
+      console.log(error)
     }
 
-    console.log(user_wallet)
 
-    // Generate token
-    const payload = { user: user, wallet: user_wallet};
-    const token = jwt.sign(payload, process.env.JWT_SECRET, {
-      expiresIn: "2h",
-    });
+}
 
-    res.status(200).json({ msg: "Logged in successfully", token });
-  } catch (err) {
-    //console.error(err.message);
-    res.status(500).send("Server error");
-  }
-};
+const getUserWallet = async(user_id) =>
+{
+     try
+    {
+        let user_wallet = Wallet.getUserWallet(user_id);
+
+        if(!user_wallet)
+        {
+          user_wallet = Wallet.createWallet(user_id,'Naira');
+          return  "No User Wallet Found";
+          
+        }
+        else
+        return user_wallet;
+    }
+    catch(error)
+    {
+      console.log(error)
+    }
+
+
+}
 
 exports.verify = async (req, res) => {
   const { code, email } = req.body;

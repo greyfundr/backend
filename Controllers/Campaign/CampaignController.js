@@ -64,10 +64,14 @@ const getCampaignById = async (req, res) => {
             "SELECT * FROM donors where campaign_id = ? ",[id]
         );
 
+    const [offers] = await pool.execute(
+            "SELECT * FROM offers where campaign_id = ? ",[id]
+        );
+
     
-    const payload = { campaigns: rows[0], donors: donors};
+    const payload = { campaigns: rows[0], donors: donors, offers: offers};
     
-        res.status(200).json({ msg: "Logged in successfully", payload });
+        res.status(200).json({ msg: "Campaign Loaded successfully", payload });
     
     console.log(rows[0]); // result will contain the fetched data
     console.log(donors);
@@ -158,7 +162,7 @@ const upload = new Upload({
 // Create a new Campaign
 const createCampaign  = async (req, res) => {
   const con = await pool.getConnection();
-  const { title, description,startDate,endDate,amount,id,stakeholders,images } = req.body;
+  const { title, description,startDate,endDate,amount,id,stakeholders,images,moffers, aoffers} = req.body;
   const form = endDate.split('/')
   const forms = startDate.split('/')
 
@@ -178,6 +182,13 @@ const createCampaign  = async (req, res) => {
 
   stakeholder = JSON.parse(stakeholders);
   hosts = stakeholder.length;
+
+  moffers = JSON.parse(moffers);
+  const mofferAsString = JSON.stringify(offers);
+
+  aoffers = JSON.parse(aoffers);
+  const aofferAsString = JSON.stringify(offers);
+
   
   console.log(stakeholder);
 
@@ -209,16 +220,12 @@ const createCampaign  = async (req, res) => {
     } 
     
    stringImages = img.join(',');
-   console.log(stringImages);
+
   try {
     // In production: const hashedPassword = await bcrypt.hash(password, 10);
-      console.log(id);
-      console.log(title);
-      console.log(amount);
-      console.log(hosts);
-      console.log(img[0]);
-      const sql = "INSERT INTO `campaigns`( `creator_id`, `title`, `description`,`start_date`, `end_date`, `goal_amount`, `current_amount`,`approved`,`host`,`images`,`category`,`image`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)";
-      const values = [id,title,description,converts,convert,amount,0,0,hosts,stringImages,'nature',img[0]]
+
+      const sql = "INSERT INTO `campaigns`( `creator_id`, `title`, `description`,`start_date`, `end_date`, `goal_amount`, `current_amount`,`approved`,`host`,`images`,`category`,`image`,`moffer`,`aoffer`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)";
+      const values = [id,title,description,converts,convert,amount,0,0,hosts,stringImages,'nature',img[0],mofferAsString,aofferAsString]
       const result = await con.execute(sql,values);
       console.log(result);
      console.log(stringImages);
