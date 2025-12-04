@@ -87,22 +87,24 @@ module.exports = {
           type: "split_bill",
           campaign_id: null,
         });
-      } else {
-        const link = SplitBillService.generateLink(p.id);
-
-        await SplitBillParticipant.update(
-          { payment_link: link },
-          { where: { id: p.id } }
-        );
-
-        const smsBody = SmsTemplate.guestAddedToBill({
-          name: p.guest_name,
-          billTitle: bill.title,
-          link,
-        });
-
-        await SmsService.send({ to: p.guest_phone, message: smsBody });
       }
+    }
+
+    if (participant.guest_name && participant.guest_phone) {
+      const link = SplitBillService.generateLink(participant.id);
+
+      await SplitBillParticipant.update(
+        { payment_link: link },
+        { where: { id: participant.id } }
+      );
+
+      const smsBody = SmsTemplate.guestAddedToBill({
+        name: participant.guest_name,
+        billTitle: bill.title,
+        link,
+      });
+
+      await SmsService.send({ to: participant.guest_phone, message: smsBody });
     }
   },
 
@@ -129,6 +131,18 @@ module.exports = {
           campaign_id: null,
         });
       }
+    }
+
+    if (removedParticipant.name && removedParticipant.guest_phone) {
+      const smsBody = SmsTemplate.participantRemoved({
+        name: removedParticipant.guest_name,
+        billTitle: bill.title,
+      });
+
+      await SmsService.send({
+        to: removedParticipant.guest_phone,
+        message: smsBody,
+      });
     }
   },
 
